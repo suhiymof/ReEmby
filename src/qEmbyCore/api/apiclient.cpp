@@ -75,10 +75,13 @@ QCoro::Task<QString> ApiClient::getText(const QString& path) {
                                           requestOptions());
 }
 
-QCoro::Task<QJsonObject> ApiClient::post(const QString& path, const QJsonObject& payload) {
+QCoro::Task<QJsonObject> ApiClient::post(const QString& path, const QJsonObject& payload,
+                                         int timeoutMs) {
     QString fullUrl = m_profile.url + path;
-    co_return co_await m_network->post(fullUrl, getAuthHeaders(), payload,
-                                       requestOptions());
+    NetworkRequestOptions options = requestOptions();
+    if (timeoutMs > 0)
+        options.timeoutMs = timeoutMs;
+    co_return co_await m_network->post(fullUrl, getAuthHeaders(), payload, options);
 }
 
 QCoro::Task<QJsonObject> ApiClient::postArray(const QString& path, const QJsonArray& payload) {
@@ -98,10 +101,14 @@ QCoro::Task<QJsonObject> ApiClient::postBytes(const QString& path,
 }
 
 QCoro::Task<QJsonObject> ApiClient::postForm(const QString& path,
-                                             const QUrlQuery& formData) {
+                                             const QUrlQuery& formData,
+                                             int timeoutMs) {
     QString fullUrl = m_profile.url + path;
+    NetworkRequestOptions options = requestOptions();
+    if (timeoutMs > 0)
+        options.timeoutMs = timeoutMs;
     co_return co_await m_network->postForm(fullUrl, getAuthHeaders(), formData,
-                                           requestOptions());
+                                           options);
 }
 
 QCoro::Task<QJsonObject> ApiClient::deleteResource(const QString& path) {

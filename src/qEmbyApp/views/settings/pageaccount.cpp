@@ -188,12 +188,25 @@ void PageAccount::onSaveClicked()
             } catch (const std::exception &e) {
                 if (!guard)
                     co_return;
+                const QString raw = QString::fromUtf8(e.what());
+                // Timed-out / aborted requests mean the server never answered
+                // (some reverse-proxy chains blackhole this endpoint) — a
+                // current-password prompt would be misleading.
+                const bool noResponse =
+                    raw.contains(QStringLiteral("canceled"), Qt::CaseInsensitive)
+                    || raw.contains(QStringLiteral("timed out"), Qt::CaseInsensitive)
+                    || raw.contains(QStringLiteral("timeout"), Qt::CaseInsensitive)
+                    || raw.contains(QStringLiteral("HTTP 0"));
+                if (noResponse) {
+                    fail(guard->tr("Request timed out: the server did not respond."));
+                    co_return;
+                }
                 // Missing/wrong CurrentPw is the common failure: reveal the
                 // field so the user can supply it once.
                 if (!guard->m_currentPasswordSection->isVisible()) {
                     guard->revealCurrentPasswordField();
                 }
-                fail(guard->tr("Change failed: %1").arg(QString::fromUtf8(e.what())));
+                fail(guard->tr("Change failed: %1").arg(raw));
             } catch (...) {
                 fail(PageAccount::tr("Change failed: unknown error"));
             }

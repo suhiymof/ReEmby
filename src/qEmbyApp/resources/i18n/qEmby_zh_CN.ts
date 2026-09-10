@@ -2128,6 +2128,10 @@ Continue from there?</source>
         <source> BiliBili</source>
         <translation> BiliBili</translation>
     </message>
+    <message>
+        <source> Account</source>
+        <translation> 账户</translation>
+    </message>
 </context>
 
 <context>
@@ -10044,6 +10048,10 @@ This cannot be undone.</source>
     <message>
         <source>Account</source>
         <translation>账户</translation>
+    </message>
+    <message>
+        <source>Request timed out: the server did not respond.</source>
+        <translation>请求超时：服务器没有响应。</translation>
     </message>
     <message>
         <source> Account</source>

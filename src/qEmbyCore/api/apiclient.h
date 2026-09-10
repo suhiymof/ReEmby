@@ -25,11 +25,13 @@ public:
     // bound the wait and fall back to something cheaper.
     QCoro::Task<QJsonObject> get(const QString& path, int timeoutMs);
     QCoro::Task<QString> getText(const QString& path);
-    QCoro::Task<QJsonObject> post(const QString& path, const QJsonObject& payload);
+    QCoro::Task<QJsonObject> post(const QString& path, const QJsonObject& payload,
+                                  int timeoutMs = 0);
     QCoro::Task<QJsonObject> postArray(const QString& path, const QJsonArray& payload);
     QCoro::Task<QJsonObject> postBytes(const QString& path, QByteArray payload,
                                        QString contentType);
-    QCoro::Task<QJsonObject> postForm(const QString& path, const QUrlQuery& formData);
+    QCoro::Task<QJsonObject> postForm(const QString& path, const QUrlQuery& formData,
+                                      int timeoutMs = 0);
     QCoro::Task<QJsonObject> deleteResource(const QString& path);
 
 private:

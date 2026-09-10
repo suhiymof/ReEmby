@@ -477,8 +477,12 @@ QCoro::Task<void> AdminService::updateUserPassword(const QString& userId,
              << (profile.type == ServerProfile::Emby ? "Emby" : "Jellyfin");
 
     const QString path = QString("/Users/%1/Password").arg(userId);
+    // Some reverse-proxy chains never answer this endpoint (TCP accepted,
+    // no HTTP response ever); bound the wait so callers get an error
+    // instead of a busy UI forever.
+    constexpr int kPasswordChangeTimeoutMs = 15000;
     if (profile.type == ServerProfile::Emby) {
-        
+
         QUrlQuery formData;
         formData.addQueryItem("NewPw", newPassword);
         if (!currentPassword.trimmed().isEmpty()) {
@@ -488,7 +492,8 @@ QCoro::Task<void> AdminService::updateUserPassword(const QString& userId,
         qDebug() << "[AdminService] updateUserPassword using Emby form payload"
                  << "| path=" << path
                  << "| fields=" << formData.queryItems().size();
-        co_await m_serverManager->activeClient()->postForm(path, formData);
+        co_await m_serverManager->activeClient()->postForm(path, formData,
+                                                           kPasswordChangeTimeoutMs);
         co_return;
     }
 
@@ -499,7 +504,8 @@ QCoro::Task<void> AdminService::updateUserPassword(const QString& userId,
         payload["CurrentPassword"] = currentPassword;
     }
 
-    co_await m_serverManager->activeClient()->post(path, payload);
+    co_await m_serverManager->activeClient()->post(path, payload,
+                                                   kPasswordChangeTimeoutMs);
 }
 
 QCoro::Task<void> AdminService::updateEasyPassword(const QString& userId,
