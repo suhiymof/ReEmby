@@ -6,6 +6,7 @@
 #include <QUuid>
 #include <config/config_keys.h>
 #include <config/configstore.h>
+#include <utils/securesecretbox.h>
 
 struct ServerProfile {
     enum ServerType { Emby, Jellyfin };
@@ -22,6 +23,38 @@ struct ServerProfile {
     QString deviceId;
     bool isAdmin = false;
     bool canDownloadMedia = false;
+
+    // Login password encrypted with SecureSecretBox::encryptLocalSecret
+    // (AES+HMAC, local machine key), base64-encoded. Kept so the settings
+    // account page can satisfy the server's CurrentPw check on self-service
+    // password changes. Empty = not stored (profiles created before this
+    // feature, or storage failed).
+    QString storedPassword;
+
+    void setStoredPassword(const QString &plainPassword) {
+        storedPassword.clear();
+        if (plainPassword.isEmpty())
+            return;
+        QByteArray pwBytes = plainPassword.toUtf8();
+        const QByteArray cipher = SecureSecretBox::encryptLocalSecret(pwBytes);
+        SecureSecretBox::secureZero(pwBytes);
+        if (!cipher.isEmpty())
+            storedPassword = QString::fromLatin1(cipher.toBase64());
+    }
+
+    // Returns the plaintext password, or empty if none was stored / the
+    // cipher cannot be decrypted (e.g. local key regenerated).
+    QString storedPasswordPlain() const {
+        if (storedPassword.isEmpty())
+            return QString();
+        const QByteArray cipher = QByteArray::fromBase64(storedPassword.toLatin1());
+        if (cipher.isEmpty())
+            return QString();
+        const auto plain = SecureSecretBox::decryptLocalSecret(cipher);
+        if (!plain.has_value())
+            return QString();
+        return QString::fromUtf8(plain.value());
+    }
 
     QString iconBase64;
 

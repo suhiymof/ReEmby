@@ -10040,6 +10040,89 @@ This cannot be undone.</source>
 </context>
 
 <context>
+    <name>PageAccount</name>
+    <message>
+        <source>Account</source>
+        <translation>账户</translation>
+    </message>
+    <message>
+        <source> Account</source>
+        <translation> 账户</translation>
+    </message>
+    <message>
+        <source>Signed in as %1 on %2</source>
+        <translation>当前登录：%2 上的 %1</translation>
+    </message>
+    <message>
+        <source>New Password</source>
+        <translation>新密码</translation>
+    </message>
+    <message>
+        <source>Confirm New Password</source>
+        <translation>确认新密码</translation>
+    </message>
+    <message>
+        <source>Current Password</source>
+        <translation>当前密码</translation>
+    </message>
+    <message>
+        <source>Enter the new password</source>
+        <translation>输入新密码</translation>
+    </message>
+    <message>
+        <source>Re-enter the new password</source>
+        <translation>再次输入新密码</translation>
+    </message>
+    <message>
+        <source>Current password (required once)</source>
+        <translation>当前密码（仅需输入一次）</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>保存</translation>
+    </message>
+    <message>
+        <source>Saving...</source>
+        <translation>保存中...</translation>
+    </message>
+    <message>
+        <source>Changing the password does not affect the current sign-in.</source>
+        <translation>修改密码不影响当前登录状态。</translation>
+    </message>
+    <message>
+        <source>Password changed. The current sign-in is not affected.</source>
+        <translation>密码已修改，当前登录不受影响。</translation>
+    </message>
+    <message>
+        <source>Password changed</source>
+        <translation>密码已修改</translation>
+    </message>
+    <message>
+        <source>No signed-in server.</source>
+        <translation>没有已登录的服务器。</translation>
+    </message>
+    <message>
+        <source>New password cannot be empty.</source>
+        <translation>新密码不能为空。</translation>
+    </message>
+    <message>
+        <source>The two passwords do not match.</source>
+        <translation>两次输入的密码不一致。</translation>
+    </message>
+    <message>
+        <source>Please enter the current password once.</source>
+        <translation>请先输入一次当前密码。</translation>
+    </message>
+    <message>
+        <source>Change failed: %1</source>
+        <translation>修改失败：%1</translation>
+    </message>
+    <message>
+        <source>Change failed: unknown error</source>
+        <translation>修改失败：未知错误</translation>
+    </message>
+</context>
+<context>
     <name>PageBilibili</name>
     <message>
         <source>BiliBili</source>

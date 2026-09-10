@@ -2,6 +2,7 @@
 #include "../../components/slidingstackedwidget.h"
 #include "../../managers/thememanager.h" 
 #include "pageabout.h"
+#include "pageaccount.h"
 #include "pageappearance.h"
 #include "pagebilibili.h"
 #include "pagegeneral.h"
@@ -68,6 +69,10 @@ void SettingsView::setupUi() {
       tr(" Appearance"));
   itemAppearance->setData(Qt::UserRole, ":/svg/dark/appearance.svg");
 
+  auto *itemAccount = new QListWidgetItem(
+      ThemeManager::getAdaptiveIcon(":/svg/dark/user.svg"), tr(" Account"));
+  itemAccount->setData(Qt::UserRole, ":/svg/dark/user.svg");
+
   auto *itemPlayer = new QListWidgetItem(
       ThemeManager::getAdaptiveIcon(":/svg/dark/player.svg"), tr(" Player"));
   itemPlayer->setData(Qt::UserRole, ":/svg/dark/player.svg");
@@ -91,6 +96,7 @@ void SettingsView::setupUi() {
   
   itemGeneral->setSizeHint(QSize(220, 44));
   itemAppearance->setSizeHint(QSize(220, 44));
+  itemAccount->setSizeHint(QSize(220, 44));
   itemPlayer->setSizeHint(QSize(220, 44));
   itemLibrary->setSizeHint(QSize(220, 44));
   itemTrakt->setSizeHint(QSize(220, 44));
@@ -99,6 +105,7 @@ void SettingsView::setupUi() {
 
   m_navMenu->addItem(itemGeneral);
   m_navMenu->addItem(itemAppearance);
+  m_navMenu->addItem(itemAccount);
   m_navMenu->addItem(itemLibrary);
   m_navMenu->addItem(itemPlayer);
   m_navMenu->addItem(itemTrakt);
@@ -116,7 +123,7 @@ void SettingsView::setupUi() {
   
   
   
-  const int kPageCount = 7;
+  const int kPageCount = 8;
   m_scrollAreas.reserve(kPageCount);
   m_scrollAnims.reserve(kPageCount);
   m_scrollTargets.reserve(kPageCount);
@@ -191,18 +198,21 @@ void SettingsView::ensurePageAt(int row) {
     page = new PageAppearance(m_core, m_stack);
     break;
   case 2:
-    page = new PageLibrary(m_core, m_stack);
+    page = new PageAccount(m_core, m_stack);
     break;
   case 3:
-    page = new PagePlayer(m_core, m_stack);
+    page = new PageLibrary(m_core, m_stack);
     break;
   case 4:
-    page = new PageTrakt(m_core, m_stack);
+    page = new PagePlayer(m_core, m_stack);
     break;
   case 5:
-    page = new PageBilibili(m_core, m_stack);
+    page = new PageTrakt(m_core, m_stack);
     break;
   case 6:
+    page = new PageBilibili(m_core, m_stack);
+    break;
+  case 7:
     page = new PageAbout(m_core, m_stack);
     break;
   default:

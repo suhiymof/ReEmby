@@ -3213,6 +3213,25 @@ LoadingOverlay {
     font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
 }
 
+/* 4.1 账户设置页（PageAccount） */
+#SettingsAccountInfo {
+    font-size: 14px;
+    color: #F0F0F0;
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+
+#SettingsFieldLabel {
+    font-size: 12px;
+    color: #94A3B8;
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+
+#SettingsAccountHint {
+    font-size: 12px;
+    color: #64748B;
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+
 /* 5. 现代拨动开关 (ModernSwitch 颜色注入) - 高级暗黑系重构 */
 ModernSwitch {
     /* 开启状态的轨道颜色 (采用品牌蓝 Blue-500，在深色背景上清晰可辨) */

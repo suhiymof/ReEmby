@@ -8,6 +8,7 @@
 #include <QObject>
 #include <QList>
 #include <QSharedPointer>
+#include <functional>
 
 class EmbyWebSocket;
 
@@ -30,6 +31,12 @@ public:
     
     void updateServerProxy(const QString& id, const ProxyConfig& proxy,
                            bool useGlobalProxy);
+
+    // Applies an in-place mutation to the server profile matched by id,
+    // refreshes the active profile copy when it is the same server, then
+    // persists to disk. No-op when no server matches.
+    void updateServerProfile(const QString& id,
+                             const std::function<void(ServerProfile&)>& mutator);
 
     
     QList<ServerProfile> servers() const { return m_servers; }

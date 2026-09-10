@@ -134,6 +134,36 @@ void ServerManager::updateServerProxy(const QString& id,
     }
 }
 
+void ServerManager::updateServerProfile(
+    const QString& id, const std::function<void(ServerProfile&)>& mutator) {
+    bool found = false;
+    bool isActive = false;
+    for (int i = 0; i < m_servers.size(); ++i) {
+        if (m_servers[i].id != id) {
+            continue;
+        }
+        mutator(m_servers[i]);
+        if (m_activeProfile.id == id) {
+            m_activeProfile = m_servers[i];
+            isActive = true;
+        }
+        found = true;
+        break;
+    }
+
+    if (!found) {
+        qWarning() << "[ServerManager] updateServerProfile: server not found"
+                   << "| id:" << id;
+        return;
+    }
+
+    saveSettings();
+    Q_EMIT serversChanged();
+    if (isActive) {
+        Q_EMIT activeServerChanged(m_activeProfile);
+    }
+}
+
 
 
 
@@ -192,6 +222,7 @@ void ServerManager::saveSettings() {
         obj["deviceId"] = p.deviceId;
         obj["isAdmin"] = p.isAdmin;
         obj["canDownloadMedia"] = p.canDownloadMedia;
+        obj["storedPassword"] = p.storedPassword;
         obj["iconBase64"] = p.iconBase64;
         obj["useGlobalProxy"] = p.useGlobalProxy;
         obj["proxy"] = p.proxy.toJson();
@@ -228,6 +259,7 @@ void ServerManager::loadSettings() {
         p.deviceId = obj["deviceId"].toString();
         p.isAdmin = obj["isAdmin"].toBool();
         p.canDownloadMedia = obj["canDownloadMedia"].toBool(false);
+        p.storedPassword = obj["storedPassword"].toString();
         p.iconBase64 = obj["iconBase64"].toString();
         p.useGlobalProxy = obj["useGlobalProxy"].toBool(false);
         p.proxy = ProxyConfig::fromJson(obj["proxy"].toObject());

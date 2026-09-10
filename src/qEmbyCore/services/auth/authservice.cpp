@@ -96,6 +96,10 @@ QCoro::Task<ServerProfile> AuthService::login(const QString& serverUrl,
     tempProfile.isAdmin = policyObj["IsAdministrator"].toBool();
     tempProfile.canDownloadMedia = resolveContentDownloadPermission(policyObj);
 
+    // Keep an encrypted copy of the login password so the settings account
+    // page can supply CurrentPw for self-service password changes.
+    tempProfile.setStoredPassword(password);
+
     
     
     {
