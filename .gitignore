@@ -53,3 +53,6 @@ release/
 
 # ops/debug artifacts (nginx config copies etc.)
 emby.conf
+
+# mpv standalone player for DV/gpu-next verification (shinchiro prebuilt)
+tools/mpv/

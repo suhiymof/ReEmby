@@ -41,7 +41,8 @@ class NativeDanmakuOverlay;
 class PlayerView : public BaseView {
     Q_OBJECT
 public:
-    explicit PlayerView(QEmbyCore *core, QWidget *parent = nullptr);
+    explicit PlayerView(QEmbyCore *core, QWidget *parent = nullptr,
+                        bool standalone = false);
     ~PlayerView() override;
     void prepareForStackLeave() override;
 
@@ -218,6 +219,8 @@ private:
 
     MpvWidget *m_mpvWidget;
     NativeDanmakuOverlay *m_nativeDanmakuOverlay = nullptr;
+    // true = 独立播放窗口（mpv 走 gpu-next + wid 自建渲染，支持杜比视界 P5）。
+    bool m_standalone = false;
 
     
     QWidget *m_topHUD;

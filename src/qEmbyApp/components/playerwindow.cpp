@@ -29,7 +29,9 @@ PlayerWindow::PlayerWindow(QEmbyCore* core, QWidget *parent)
 #endif
 
     
-    m_playerView = new PlayerView(core, this);
+    // standalone=true：独立窗口用 mpv gpu-next + wid 自建渲染，正确显示杜比
+    // 视界（P5）而非发绿；主窗口内嵌路径保持 render API 不变。
+    m_playerView = new PlayerView(core, this, true);
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);

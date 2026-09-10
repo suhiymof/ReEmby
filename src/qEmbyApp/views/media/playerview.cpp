@@ -427,8 +427,8 @@ void detachFadeGroupTargets(QParallelAnimationGroup *group)
 }
 } 
 
-PlayerView::PlayerView(QEmbyCore *core, QWidget *parent)
-    : BaseView(core, parent), m_isPlaying(false), m_currentPosition(0.0), m_totalDuration(0.0), m_activePopup(nullptr)
+PlayerView::PlayerView(QEmbyCore *core, QWidget *parent, bool standalone)
+    : BaseView(core, parent), m_isPlaying(false), m_currentPosition(0.0), m_totalDuration(0.0), m_activePopup(nullptr), m_standalone(standalone)
 {
 
     setProperty("isImmersive", true);
@@ -1230,7 +1230,7 @@ QPushButton *PlayerView::createHudButton(const QString &iconPath, const QSize &s
 
 void PlayerView::setupUi()
 {
-    m_mpvWidget = new MpvWidget(this);
+    m_mpvWidget = new MpvWidget(this, m_standalone);
     m_mpvWidget->setAutoFillBackground(true);
     m_mpvWidget->installEventFilter(this); 
     m_mpvWidget->setMouseTracking(true);

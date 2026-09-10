@@ -20,7 +20,11 @@ public:
     QString effectiveHwdec() const { return m_effectiveHwdec; }
 
     
-    bool init();
+    // standalone=true：改用 vo=gpu-next + wid 让 mpv 自建渲染（挂到 wid 指向的
+    // 原生 HWND），绕开 render API 锁死的旧 gpu renderer，从而支持 Dolby Vision
+    // P5（libplacebo/gpu-next 才处理 IPT 色彩）。Embedded 场景保持 vo=libmpv
+    // render API 不变。
+    bool init(bool standalone = false, void *wid = nullptr);
 
     
     void forceCleanup();

@@ -6,6 +6,7 @@
 #include <QElapsedTimer>
 #include <QThreadPool>
 #include <clocale>
+#include <cstdint>
 #include <config/configstore.h>
 #include <config/config_keys.h>
 #include <QStandardPaths>
@@ -98,7 +99,7 @@ void MpvController::warmupOnce() {
     });
 }
 
-bool MpvController::init() {
+bool MpvController::init(bool standalone, void *wid) {
     
     std::setlocale(LC_NUMERIC, "C");
 
@@ -119,8 +120,19 @@ bool MpvController::init() {
     mpv_set_option_string(m_mpv, "config", "no");
 
     
-    
-    mpv_set_option_string(m_mpv, "vo", "libmpv");
+    // standalone：mpv 自建渲染管线（vo=gpu-next → d3d11）挂到 wid 指向的
+    // 原生 HWND，绕开 render API 的旧 gpu renderer，从而支持杜比视界 P5。
+    // Embedded：render API（vo=libmpv），由 MpvWidget 的 OpenGL 上下文驱动。
+    if (standalone) {
+        mpv_set_option_string(m_mpv, "vo", "gpu-next");
+        if (wid) {
+            int64_t widValue =
+                static_cast<int64_t>(reinterpret_cast<std::intptr_t>(wid));
+            mpv_set_option(m_mpv, "wid", MPV_FORMAT_INT64, &widValue);
+        }
+    } else {
+        mpv_set_option_string(m_mpv, "vo", "libmpv");
+    }
     
     mpv_set_option_string(m_mpv, "keep-open", "yes");
     
@@ -157,8 +169,12 @@ bool MpvController::init() {
     QString hwdec = ConfigStore::instance()->get<QString>(ConfigKeys::PlayerHwDec, "auto-copy");
 
 #ifdef Q_OS_WIN
-    mpv_set_option_string(m_mpv, "gpu-api", "opengl");
-    mpv_set_option_string(m_mpv, "opengl-es", "no");
+    // Embedded（render API）走 OpenGL 后端；standalone（gpu-next）由 mpv 自选
+    // d3d11，不能再强制 gpu-api=opengl，否则 gpu-next 会退回 OpenGL 互操作。
+    if (!standalone) {
+        mpv_set_option_string(m_mpv, "gpu-api", "opengl");
+        mpv_set_option_string(m_mpv, "opengl-es", "no");
+    }
     bool isRDP = GetSystemMetrics(SM_REMOTESESSION) != 0;
     if (isRDP) {
         
@@ -167,8 +183,10 @@ bool MpvController::init() {
 
         
         mpv_set_option_string(m_mpv, "gpu-dumb-mode", "yes");
-        mpv_set_option_string(m_mpv, "opengl-pbo", "no");
-        mpv_set_option_string(m_mpv, "dither-depth", "no");
+        if (!standalone) {
+            mpv_set_option_string(m_mpv, "opengl-pbo", "no");
+            mpv_set_option_string(m_mpv, "dither-depth", "no");
+        }
     }
 #endif
     mpv_set_option_string(m_mpv, "hwdec", hwdec.toUtf8().constData());

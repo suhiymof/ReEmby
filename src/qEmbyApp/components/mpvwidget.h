@@ -8,11 +8,15 @@
 #include "mpvcontroller.h"
 
 class MpvHttpStreamRelay;
+class QPaintEvent;
 
 class MpvWidget : public QOpenGLWidget, protected QOpenGLFunctions {
     Q_OBJECT
 public:
-    explicit MpvWidget(QWidget *parent = nullptr);
+    // standalone=true：独立窗口模式，mpv 用 vo=gpu-next + wid 自建渲染到
+    // 本 widget 的原生 HWND（绕开 render API 的旧 gpu renderer，支持杜比
+    // 视界 P5）。此时本 widget 不再走 OpenGL render context，仅充当 wid 容器。
+    explicit MpvWidget(QWidget *parent = nullptr, bool standalone = false);
     ~MpvWidget() override;
 
     
@@ -49,6 +53,9 @@ protected:
     void initializeGL() override;
     void paintGL() override;
     void resizeGL(int w, int h) override;
+    // standalone 模式不触发 QOpenGLWidget 的 GL 合成（避免与 mpv d3d11 直绘
+    // 争抢同一原生 HWND），直接吞掉 paint 事件。
+    void paintEvent(QPaintEvent *event) override;
 
 private slots:
     void cleanupGL(); 
@@ -63,6 +70,7 @@ private:
     MpvHttpStreamRelay *m_streamRelay = nullptr;
     bool m_usingStreamRelay = false;
     bool m_resumeWhenRenderReady = false;
+    bool m_standalone = false;
     mpv_render_context *m_mpv_gl;
 
     

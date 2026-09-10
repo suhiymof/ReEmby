@@ -7,17 +7,22 @@
 #include <QDir>
 #include <QSettings>
 #include <QSurfaceFormat>
+#include <QPaintEvent>
 #include <QUrl>
 #include <QVariantMap>
 #include "api/proxymanager.h"
 #include "config/config_keys.h"
 #include "config/configstore.h"
 
-MpvWidget::MpvWidget(QWidget *parent)
-    : QOpenGLWidget(parent), m_mpv_gl(nullptr) {
+MpvWidget::MpvWidget(QWidget *parent, bool standalone)
+    : QOpenGLWidget(parent), m_standalone(standalone), m_mpv_gl(nullptr) {
 
-    
-    
+    // standalone 模式：强制原生 HWND 供 mpv（vo=gpu-next + wid）直绘。不创建
+    // OpenGL render context，本 widget 仅充当 mpv 渲染目标容器。
+    if (m_standalone) {
+        setAttribute(Qt::WA_NativeWindow);
+    }
+
     
     QSurfaceFormat format = this->format(); 
     
@@ -36,9 +41,10 @@ MpvWidget::MpvWidget(QWidget *parent)
     connect(m_controller, &MpvController::errorOccurred, this, &MpvWidget::errorOccurred);
 
     
-    
-
-    m_controller->init();
+    // standalone 时把本 widget 的原生 HWND 作为 wid 传给 mpv，让其自建渲染。
+    m_controller->init(m_standalone,
+                       m_standalone ? reinterpret_cast<void *>(winId())
+                                    : nullptr);
 }
 
 MpvWidget::~MpvWidget() {
@@ -208,6 +214,16 @@ void MpvWidget::paintGL() {
 void MpvWidget::resizeGL(int w, int h) {
     Q_UNUSED(w);
     Q_UNUSED(h);
+}
+
+void MpvWidget::paintEvent(QPaintEvent *event) {
+    // standalone 模式下 mpv 用 d3d11 直绘到本 widget 的原生 HWND，这里不走
+    // QOpenGLWidget 的 GL 合成（否则会争抢同一 HWND、触发无谓的 GL 上下文）。
+    if (m_standalone) {
+        Q_UNUSED(event);
+        return;
+    }
+    QOpenGLWidget::paintEvent(event);
 }
 
 
@@ -437,6 +453,11 @@ void MpvWidget::loadMediaNow(const QString &url, const QString &serverId, bool w
 
 void MpvWidget::loadMedia(const QString &url, const QString &serverId) {
     
+    if (m_standalone) {
+        // standalone 无 render context，mpv 自建渲染，无需等待就绪即可加载。
+        loadMediaNow(url, serverId, false);
+        return;
+    }
     if (!m_mpv_gl) {
         m_pendingUrl = url;
         m_pendingServerId = serverId;
@@ -450,6 +471,11 @@ void MpvWidget::play() {
 }
 
 void MpvWidget::resumeAfterContextRestore() {
+    if (m_standalone) {
+        m_controller->setProperty("pause", false);
+        return;
+    }
+
     if (!m_mpv_gl || !context() || !context()->isValid()) {
         m_resumeWhenRenderReady = true;
         qInfo() << "[MpvWidget] Resume deferred until OpenGL context is ready";
