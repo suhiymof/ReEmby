@@ -1796,8 +1796,9 @@ void PlayerView::applyStandaloneOverlay()
     // 收集所有需要浮在视频之上的覆盖式 HUD 控件。
     // 注：Qt 原生子窗口背景默认不透明，会遮挡视频；本轮先不处理（独立窗口的
     // HUD 视觉一致性需要重新设计半透明/全屏布局，留作后续工作）。
+    // PlayerOsdLayer 本身是 QObject（非 QWidget），这里取其 container() 容器。
     const QList<QWidget *> overlayWidgets = {
-        m_topHUD, m_bottomHUD, m_loadingOverlay, m_osdLayer, m_statisticsOverlay,
+        m_topHUD, m_bottomHUD, m_loadingOverlay, m_statisticsOverlay,
         m_logoLabel, m_currentTimeLabel, m_progressSlider, m_totalTimeLabel,
         m_prevMediaBtn, m_playPauseBtn, m_rewindBtn, m_forwardBtn, m_nextMediaBtn,
         m_volumeBtn, m_volumeSlider, m_backBtn, m_titleLabel,
@@ -1805,6 +1806,8 @@ void PlayerView::applyStandaloneOverlay()
         m_speedBtn, m_mediaSwitchBtn, m_audioBtn, m_subtitleBtn,
         m_danmakuBtn, m_settingsBtn, m_scaleBtn, m_fullscreenBtn,
         m_toastLabel, m_nativeDanmakuOverlay, m_rightSidebar, m_rightTrigger,
+        m_mediaSwitchDrawer,
+        m_osdLayer ? m_osdLayer->container() : nullptr,
     };
     for (QWidget *w : overlayWidgets) {
         if (!w) {
