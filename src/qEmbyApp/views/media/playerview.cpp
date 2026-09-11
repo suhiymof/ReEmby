@@ -1823,12 +1823,10 @@ void PlayerView::applyStandaloneOverlay()
         w->setAttribute(Qt::WA_NativeWindow, true);
         // 抬到视频层之上
         w->raise();
+        // 原生窗口没有 alpha 通道，统一用 layered window 恢复半透明观感
+        // （顶部/底部 HUD、右侧选集侧边栏、统计/加载/OSD 等覆盖层）。
+        applyStandaloneTranslucency(w);
     }
-
-    // 原生窗口不参与 QGraphicsOpacityEffect 合成，QSS 的 rgba 背景也会被拍平，
-    // 半透明靠 Win32 layered window 实现。
-    applyStandaloneTranslucency(m_topHUD);
-    applyStandaloneTranslucency(m_bottomHUD);
 }
 
 void PlayerView::applyStandaloneTranslucency(QWidget *layer)
