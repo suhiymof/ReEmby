@@ -61,9 +61,21 @@
 #include <services/manager/servermanager.h>
 #include <services/media/mediaservice.h>
 
+#ifdef Q_OS_WIN
+// 独立播放窗口模式下用 layered window 给原生 HUD 层做半透明
+// （SetLayeredWindowAttributes / WS_EX_LAYERED）。
+#  ifndef WIN32_LEAN_AND_MEAN
+#    define WIN32_LEAN_AND_MEAN
+#  endif
+#  include <windows.h>
+#endif
+
 namespace
 {
 constexpr int kHudAutoHideDelayMs = 1800;
+// 独立播放窗口（standalone）下 HUD 是原生窗口、靠 setVisible 显隐，观感比
+// 内嵌的淡出更"硬"，给长一点的停留时间（用户期望 ~5s）。
+constexpr int kStandaloneHudAutoHideDelayMs = 5000;
 
 // 纯 Dolby Vision（profile 5，无 HDR10/SDR 兼容层）。硬解会把携带 DV
 // 元数据的 RPU NAL 丢弃，mpv 无法应用 fallback 色彩映射 → 画面发绿。
@@ -1783,9 +1795,8 @@ void PlayerView::setupUi()
 void PlayerView::applyStandaloneOverlay()
 {
     // standalone 模式下 MpvWidget 是 WA_NativeWindow 原生子窗口，mpv 用 d3d11
-    // 直绘到它的 HWND。如果覆盖式 HUD 还是普通 QWidget（画在父窗口 backing
-    // store），会被 MpvWidget 的原生窗口盖住。把所有 HUD 提升为 native child
-    // window 并 raise 到 MpvWidget 之上，让 z-order 独立于 backing store。
+    // 直绘到它的 HWND。普通 QWidget 画在父窗口 backing store 上，会被原生窗口
+    // 盖住，因此 HUD 必须同样提升为原生子窗口，z-order 才能高于视频层。
     if (!m_standalone || !m_mpvWidget) {
         return;
     }
@@ -1793,30 +1804,75 @@ void PlayerView::applyStandaloneOverlay()
     // 视频层降到最底
     m_mpvWidget->lower();
 
-    // 收集所有需要浮在视频之上的覆盖式 HUD 控件。
-    // 注：Qt 原生子窗口背景默认不透明，会遮挡视频；本轮先不处理（独立窗口的
-    // HUD 视觉一致性需要重新设计半透明/全屏布局，留作后续工作）。
-    // PlayerOsdLayer 本身是 QObject（非 QWidget），这里取其 container() 容器。
+    // 只提升 PlayerView 的直接子容器（顶层覆盖层）。嵌套子控件（进度条、按钮、
+    // toast、选集抽屉等）随其容器一起渲染：它们若各自成为独立原生 HWND，层内
+    // 每个控件都是不透明窗口，既无法统一做半透明，z-order 也更难维持。
+    // PlayerOsdLayer 是 QObject（非 QWidget），取它的 container() 容器。
     const QList<QWidget *> overlayWidgets = {
         m_topHUD, m_bottomHUD, m_loadingOverlay, m_statisticsOverlay,
-        m_logoLabel, m_currentTimeLabel, m_progressSlider, m_totalTimeLabel,
-        m_prevMediaBtn, m_playPauseBtn, m_rewindBtn, m_forwardBtn, m_nextMediaBtn,
-        m_volumeBtn, m_volumeSlider, m_backBtn, m_titleLabel,
-        m_minBtn, m_maxBtn, m_closeBtn, m_networkSpeedLabel,
-        m_speedBtn, m_mediaSwitchBtn, m_audioBtn, m_subtitleBtn,
-        m_danmakuBtn, m_settingsBtn, m_scaleBtn, m_fullscreenBtn,
-        m_toastLabel, m_nativeDanmakuOverlay, m_rightSidebar, m_rightTrigger,
-        m_mediaSwitchDrawer,
+        m_logoLabel, m_networkSpeedLabel, m_nativeDanmakuOverlay,
+        m_rightSidebar, m_rightTrigger,
         m_osdLayer ? m_osdLayer->container() : nullptr,
     };
     for (QWidget *w : overlayWidgets) {
-        if (!w) {
+        // parentWidget() == this 兜底过滤，确保只提升顶层容器
+        if (!w || w->parentWidget() != this) {
             continue;
         }
         // 关键：提升为独立原生子窗口（z-order 独立于 backing store）
         w->setAttribute(Qt::WA_NativeWindow, true);
         // 抬到视频层之上
         w->raise();
+    }
+
+    // 原生窗口不参与 QGraphicsOpacityEffect 合成，QSS 的 rgba 背景也会被拍平，
+    // 半透明靠 Win32 layered window 实现。
+    applyStandaloneTranslucency(m_topHUD);
+    applyStandaloneTranslucency(m_bottomHUD);
+}
+
+void PlayerView::applyStandaloneTranslucency(QWidget *layer)
+{
+    if (!m_standalone || !layer) {
+        return;
+    }
+#ifdef Q_OS_WIN
+    // 原生子窗口没有 alpha 通道，QSS 的 rgba 背景会被拍平成不透明；用 layered
+    // window 的全局 alpha（LWA_ALPHA）让整层带透明度，观感接近内嵌 HUD。
+    const HWND hwnd = reinterpret_cast<HWND>(layer->winId());
+    if (!hwnd) {
+        return;
+    }
+    const LONG_PTR exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
+    SetWindowLongPtr(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
+    SetLayeredWindowAttributes(hwnd, 0, 235, LWA_ALPHA);
+    qInfo().noquote() << "[PlayerView] Standalone HUD layer translucency applied"
+                      << "| object:" << layer->objectName()
+                      << "| alpha:" << 235;
+#else
+    Q_UNUSED(layer);
+#endif
+}
+
+void PlayerView::setStandaloneHudVisible(bool visible)
+{
+    // 原生窗口不参与 QGraphicsOpacityEffect 合成，opacity 淡入淡出对其无效，
+    // HUD 会一直常驻显示；这里改用 setVisible 显隐（子控件随容器一起显隐）。
+    if (!m_standalone) {
+        return;
+    }
+    if (m_topHUD) {
+        m_topHUD->setVisible(visible);
+    }
+    if (m_bottomHUD) {
+        m_bottomHUD->setVisible(visible);
+    }
+    if (m_logoLabel) {
+        m_logoLabel->setVisible(visible);
+    }
+    // 网速标签：仅在配置启用时跟随 HUD 显隐（关闭时由既有逻辑保持隐藏）
+    if (m_networkSpeedLabel && m_showNetworkSpeed) {
+        m_networkSpeedLabel->setVisible(visible);
     }
 }
 
@@ -3315,7 +3371,8 @@ void PlayerView::handlePointerActivity(const QPoint &globalPos)
 
     if (m_isPlaying)
     {
-        m_hideTimer->start(kHudAutoHideDelayMs);
+        m_hideTimer->start(m_standalone ? kStandaloneHudAutoHideDelayMs
+                                        : kHudAutoHideDelayMs);
     }
     else
     {
@@ -3358,6 +3415,11 @@ void PlayerView::setPlayerChromeVisible(bool visible)
 
 bool PlayerView::areControlsFullyVisible() const
 {
+    if (m_standalone)
+    {
+        // standalone 下 HUD 是原生窗口，不走 opacity 动画，以可见性为准
+        return m_topHUD && m_topHUD->isVisible();
+    }
     return m_topOpacity && m_topOpacity->opacity() >= 1.0 &&
            (!m_fadeGroup || m_fadeGroup->state() != QAbstractAnimation::Running);
 }
@@ -3381,11 +3443,20 @@ void PlayerView::showControls()
 
     if (m_isPlaying)
     {
-        m_hideTimer->start(kHudAutoHideDelayMs);
+        m_hideTimer->start(m_standalone ? kStandaloneHudAutoHideDelayMs
+                                        : kHudAutoHideDelayMs);
     }
     else
     {
         m_hideTimer->stop(); 
+    }
+
+    if (m_standalone)
+    {
+        // standalone 下 HUD 是原生窗口，opacity 动画（QGraphicsOpacityEffect）
+        // 对其无效，直接显隐。
+        setStandaloneHudVisible(true);
+        return;
     }
 
     if (m_topOpacity->opacity() >= 1.0 && m_fadeGroup->state() != QAbstractAnimation::Running)
@@ -3471,6 +3542,15 @@ void PlayerView::hideControls()
         m_activePopup->close();
         m_activePopup->deleteLater();
         m_activePopup = nullptr;
+    }
+
+    if (m_standalone)
+    {
+        // standalone 下 HUD 是原生窗口，opacity 淡出对其无效（会常驻显示），
+        // 改用显隐。
+        setStandaloneHudVisible(false);
+        setCursorHidden(true);
+        return;
     }
 
     if (m_topOpacity->opacity() <= 0.0)

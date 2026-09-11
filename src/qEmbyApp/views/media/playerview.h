@@ -125,6 +125,12 @@ private:
     // 独立播放窗口模式：把覆盖式 HUD 全部提升为原生子窗口并抬到 MpvWidget 之上，
     // 避免被 mpv d3d11 直绘的 MpvWidget (WA_NativeWindow) 原生窗口遮盖。
     void applyStandaloneOverlay();
+    // 独立播放窗口模式：原生窗口不参与 QGraphicsOpacityEffect 合成，半透明改用
+    // Win32 layered（WS_EX_LAYERED + 全局 alpha）。
+    void applyStandaloneTranslucency(QWidget *layer);
+    // 独立播放窗口模式：HUD 是原生窗口，淡入淡出（opacity 动画）对其无效，会一直
+    // 常驻；改用 setVisible 显隐（子控件随容器一起显隐）。
+    void setStandaloneHudVisible(bool visible);
     // 独立播放窗口模式：动态创建的弹层（菜单/设置对话框）单点提升为原生子窗口，
     // 让超出固定 HUD 区域的部分也浮在视频层之上（弹层显示前调用）。
     void promoteStandaloneLayer(QWidget *layer);
