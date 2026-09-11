@@ -73,9 +73,13 @@
 namespace
 {
 constexpr int kHudAutoHideDelayMs = 1800;
-// 独立播放窗口（standalone）下 HUD 是原生窗口、靠 setVisible 显隐，观感比
-// 内嵌的淡出更"硬"，给长一点的停留时间（用户期望 ~5s）。
-constexpr int kStandaloneHudAutoHideDelayMs = 5000;
+// 独立播放窗口（standalone）下 HUD 是原生窗口、靠 setVisible 显隐，停留时间
+// 比内嵌略长一点。
+constexpr int kStandaloneHudAutoHideDelayMs = 2000;
+// standalone 覆盖层（原生子窗口）的 layered window 全局 alpha（0-255）。
+// 取值过高（如 235）视觉上接近不透明、看不出效果；180 接近内嵌 HUD 的
+// rgba(0,0,0,~180/255) 观感，能明显透出视频。
+constexpr int kStandaloneLayerAlpha = 180;
 
 // 纯 Dolby Vision（profile 5，无 HDR10/SDR 兼容层）。硬解会把携带 DV
 // 元数据的 RPU NAL 丢弃，mpv 无法应用 fallback 色彩映射 → 画面发绿。
@@ -1836,17 +1840,23 @@ void PlayerView::applyStandaloneTranslucency(QWidget *layer)
     }
 #ifdef Q_OS_WIN
     // 原生子窗口没有 alpha 通道，QSS 的 rgba 背景会被拍平成不透明；用 layered
-    // window 的全局 alpha（LWA_ALPHA）让整层带透明度，观感接近内嵌 HUD。
+    // window 的全局 alpha（LWA_ALPHA）让整层带透明度。
+    // 注意：Qt 在窗口 show/样式重算时会用自己的 exStyle 覆盖 GWL_EXSTYLE，
+    // 所以本方法会被重复调用（每次显示覆盖层时补一次），这里每次都无条件重设。
     const HWND hwnd = reinterpret_cast<HWND>(layer->winId());
     if (!hwnd) {
         return;
     }
     const LONG_PTR exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
     SetWindowLongPtr(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
-    SetLayeredWindowAttributes(hwnd, 0, 235, LWA_ALPHA);
-    qInfo().noquote() << "[PlayerView] Standalone HUD layer translucency applied"
+    const BOOL applied =
+        SetLayeredWindowAttributes(hwnd, 0, kStandaloneLayerAlpha, LWA_ALPHA);
+    qInfo().noquote() << "[PlayerView] Standalone layer translucency"
                       << "| object:" << layer->objectName()
-                      << "| alpha:" << 235;
+                      << "| hwnd:" << reinterpret_cast<quintptr>(hwnd)
+                      << "| alpha:" << kStandaloneLayerAlpha
+                      << "| applied:" << (applied != FALSE)
+                      << "| error:" << static_cast<quint32>(GetLastError());
 #else
     Q_UNUSED(layer);
 #endif
@@ -1871,6 +1881,16 @@ void PlayerView::setStandaloneHudVisible(bool visible)
     // 网速标签：仅在配置启用时跟随 HUD 显隐（关闭时由既有逻辑保持隐藏）
     if (m_networkSpeedLabel && m_showNetworkSpeed) {
         m_networkSpeedLabel->setVisible(visible);
+    }
+    if (visible) {
+        // Qt 在 widget show/样式重算时会用自己的 exStyle 覆盖 GWL_EXSTYLE，
+        // 半透明会丢失；每次显示时补一次 layered（幂等，代价可忽略）。
+        applyStandaloneTranslucency(m_topHUD);
+        applyStandaloneTranslucency(m_bottomHUD);
+        applyStandaloneTranslucency(m_logoLabel);
+        if (m_networkSpeedLabel && m_showNetworkSpeed) {
+            applyStandaloneTranslucency(m_networkSpeedLabel);
+        }
     }
 }
 
@@ -2604,6 +2624,9 @@ QCoro::Task<void> PlayerView::showRightSidebar()
     }
 
     showControls();
+
+    // standalone：侧边栏已 show，补一次 layered（Qt 可能重算 window style）
+    applyStandaloneTranslucency(m_rightSidebar);
 
     if (m_switcherCacheReady && m_switcherCacheMediaId == m_currentMediaId)
     {
