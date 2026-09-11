@@ -169,6 +169,18 @@ bool MpvController::init(bool standalone, void *wid) {
     QString hwdec = ConfigStore::instance()->get<QString>(ConfigKeys::PlayerHwDec, "auto-copy");
 
 #ifdef Q_OS_WIN
+    // standalone 用 d3d11 渲染（gpu-next），"-copy" 变体（auto-copy / d3d11va-copy）
+    // 会多做一次 GPU→内存→GPU 的往返拷贝，4K 10bit 下开销明显（用户实测独立窗口
+    // 播放卡顿）。d3d11 支持零拷贝互操作，这里把 copy 变体映射回非 copy 版本
+    // （auto-copy→auto、d3d11va-copy→d3d11va）。内嵌（render API + OpenGL）保持
+    // 原有 auto-copy 不变。
+    if (standalone && hwdec.endsWith(QLatin1String("-copy"))) {
+        const QString zeroCopyHwdec = hwdec.left(hwdec.size() - 5);
+        qInfo() << "[MpvController] standalone hwdec mapped to zero-copy variant"
+                << "| configured:" << hwdec << "| effective:" << zeroCopyHwdec;
+        hwdec = zeroCopyHwdec;
+    }
+
     // Embedded（render API）走 OpenGL 后端；standalone（gpu-next）由 mpv 自选
     // d3d11，不能再强制 gpu-api=opengl，否则 gpu-next 会退回 OpenGL 互操作。
     if (!standalone) {

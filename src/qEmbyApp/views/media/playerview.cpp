@@ -76,9 +76,6 @@ constexpr int kHudAutoHideDelayMs = 1800;
 // 独立播放窗口（standalone）下 HUD 是原生窗口、靠 setVisible 显隐，停留时间
 // 比内嵌略长一点。
 constexpr int kStandaloneHudAutoHideDelayMs = 2000;
-// standalone 下 HUD 是原生窗口（位于视频层之上）会遮住画面底部的字幕；
-// HUD 显示时用 sub-margin-y 把字幕抬高这么多像素（HUD 高 110 + 余量）。
-constexpr int kStandaloneSubtitleHudOffsetPx = 130;
 
 // 纯 Dolby Vision（profile 5，无 HDR10/SDR 兼容层）。硬解会把携带 DV
 // 元数据的 RPU NAL 丢弃，mpv 无法应用 fallback 色彩映射 → 画面发绿。
@@ -1154,7 +1151,11 @@ void PlayerView::applyDecodeDecision(const MediaSourceInfo &source)
     const bool need = hasData ? sourceNeedsForcedSoftwareDecode(source)
                               : m_swDecodeForCurrentMedia;
     m_swDecodeForCurrentMedia = need;
-    m_mpvWidget->setForceSoftwareDecode(need);
+    // standalone（独立窗口，vo=gpu-next + d3d11）不需要为纯 DV 强制软解：DV 的
+    // RPU 由 libplacebo 正确应用，实测 d3d11va 硬解同样不发绿；而 4K 10bit 纯
+    // 软解本身就是明显的卡顿来源（用户实测独立窗口比内嵌卡）。内嵌仍走 render
+    // API 的旧 gpu renderer，保持原有软解策略不变。
+    m_mpvWidget->setForceSoftwareDecode(need && !m_standalone);
 }
 
 
@@ -1852,24 +1853,6 @@ void PlayerView::applyStandaloneTranslucency(QWidget *layer)
     layer->setAttribute(Qt::WA_NoSystemBackground, true);
 }
 
-void PlayerView::applyStandaloneSubtitleHudOffset(bool hudVisible)
-{
-    // wid 模式下 HUD 是原生窗口（层在视频之上），会遮住渲染在视频帧内的字幕
-    // （字幕在画面底部）。HUD 显示时把字幕抬高，隐藏时复位。
-    // 只调 sub-margin-y，不动 sub-pos —— 后者由 SubtitleStyleUtils 按用户设置
-    // 管理，避免相互覆盖。
-    if (!m_standalone || !m_mpvWidget || !m_mpvWidget->controller()) {
-        return;
-    }
-    const int offset = hudVisible ? kStandaloneSubtitleHudOffsetPx : 0;
-    m_mpvWidget->controller()->setProperty(QStringLiteral("sub-margin-y"), offset);
-    // TODO(第二字幕)：双语/双轨字幕同样需要避让，但 mpv 未提供
-    // secondary-sub-margin-y，届时要用 secondary-sub-pos（百分比）换算。
-    qDebug().noquote() << "[PlayerView] Standalone subtitle HUD offset"
-                       << "| hudVisible:" << hudVisible
-                       << "| sub-margin-y:" << offset;
-}
-
 void PlayerView::logStandaloneLayerDiagnostics()
 {
     // 只在首次显示时打一次，避免 HUD 频繁显隐刷屏。用于确认 Qt 是否真的为原生
@@ -1939,8 +1922,8 @@ void PlayerView::setStandaloneHudVisible(bool visible)
         logStandaloneLayerDiagnostics();
     }
 
-    // 字幕避让：HUD 显示时把字幕抬到 HUD 之上，隐藏时复位
-    applyStandaloneSubtitleHudOffset(visible);
+    // 注意：字幕刻意不做 HUD 避让——与内嵌播放器保持一致，字幕始终停留在
+    // 实际视频画面内（由 SubtitleStyleUtils 的 sub-pos 决定），不随 HUD 显隐移动。
 }
 
 void PlayerView::promoteStandaloneLayer(QWidget *layer)
