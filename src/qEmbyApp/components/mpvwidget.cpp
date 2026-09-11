@@ -275,8 +275,9 @@ void MpvWidget::syncStandaloneRenderArea(const char *when) {
     if (!m_standalone) {
         return;
     }
-    const HWND parent = reinterpret_cast<HWND>(winId());
-    if (!parent) {
+    // 命名避免 parent/child —— 会遮蔽 QObject::parent()，且易与 Qt 成员混淆。
+    const HWND parentHwnd = reinterpret_cast<HWND>(winId());
+    if (!parentHwnd) {
         return;
     }
     // wid 模式下 mpv 会自建一个 WS_CHILD 渲染窗口，其客户区就是 mpv 的渲染区
@@ -289,16 +290,16 @@ void MpvWidget::syncStandaloneRenderArea(const char *when) {
     // 表现为"播放区没有自适应比例"）。这里在 widget 尺寸变化/首次显示/开始播放
     // 后直接把 mpv 子窗口设为 widget 客户区大小，等同于补一次漏掉的同步。
     // 幂等：尺寸一致时直接返回，不重复 SetWindowPos。
-    const HWND child = FindWindowExW(parent, nullptr, kMpvWindowClass, nullptr);
+    const HWND child = FindWindowExW(parentHwnd, nullptr, kMpvWindowClass, nullptr);
     if (!child) {
         // 类名兜底（mpv 的窗口类名若有变化，就取第一个子窗口）。
-        if (!(child = FindWindowExW(parent, nullptr, nullptr, nullptr))) {
+        if (!(child = FindWindowExW(parentHwnd, nullptr, nullptr, nullptr))) {
             // mpv 的子窗口尚未创建（VO 未初始化），后续 resize/show/fileLoaded 会再调。
             return;
         }
     }
     RECT target{};
-    if (!GetClientRect(parent, &target)) {
+    if (!GetClientRect(parentHwnd, &target)) {
         return;
     }
     RECT current{};
@@ -310,7 +311,9 @@ void MpvWidget::syncStandaloneRenderArea(const char *when) {
     }
     SetWindowPos(child, nullptr, 0, 0, target.right, target.bottom,
                  SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS);
-    logStandaloneRenderDiagnostics(when);
+    // 延迟一点再打诊断：等 mpv 处理完 WM_SIZE、重建 swapchain 之后，dwidth/dheight
+    // 才是新值（用 this 作为 context，widget 销毁后自动取消）。
+    QTimer::singleShot(120, this, [this, when]() { logStandaloneRenderDiagnostics(when); });
 #else
     Q_UNUSED(when);
 #endif

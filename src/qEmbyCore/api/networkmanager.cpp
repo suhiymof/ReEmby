@@ -195,10 +195,12 @@ void NetworkManager::attachReplyHandlers(QNetworkReply* reply,
 
 void NetworkManager::notifyServerUnavailableIfNeeded(QNetworkReply* reply,
                                                      int httpStatus) {
-    const bool serverUnavailable =
+    // 注意：局部变量不能命名为 serverUnavailable —— 会遮蔽同名信号，
+    // `emit serverUnavailable(...)` 会被当成"调用 bool 变量"→ MSVC C2064。
+    const bool isServerUnavailable =
         httpStatus >= 500 ||
         (reply && reply->error() == QNetworkReply::TimeoutError);
-    if (!serverUnavailable) {
+    if (!isServerUnavailable) {
         return;
     }
 
