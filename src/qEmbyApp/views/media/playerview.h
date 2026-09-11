@@ -126,8 +126,11 @@ private:
     // 避免被 mpv d3d11 直绘的 MpvWidget (WA_NativeWindow) 原生窗口遮盖。
     void applyStandaloneOverlay();
     // 独立播放窗口模式：原生窗口不参与 QGraphicsOpacityEffect 合成，半透明改用
-    // Win32 layered（WS_EX_LAYERED + 全局 alpha）。
+    // Qt 的 WA_TranslucentBackground（Windows 平台插件据此启用 WS_EX_LAYERED +
+    // UpdateLayeredWindow 做 per-pixel alpha 合成）。
     void applyStandaloneTranslucency(QWidget *layer);
+    // 诊断：确认 Qt 是否已为 standalone 覆盖层真正启用 WS_EX_LAYERED（只打一次）。
+    void logStandaloneLayerDiagnostics();
     // 独立播放窗口模式：HUD 是原生窗口，淡入淡出（opacity 动画）对其无效，会一直
     // 常驻；改用 setVisible 显隐（子控件随容器一起显隐）。
     void setStandaloneHudVisible(bool visible);
