@@ -129,6 +129,9 @@ private:
     // Qt 的 WA_TranslucentBackground（Windows 平台插件据此启用 WS_EX_LAYERED +
     // UpdateLayeredWindow 做 per-pixel alpha 合成）。
     void applyStandaloneTranslucency(QWidget *layer);
+    // 独立播放窗口模式：HUD 是原生窗口、位于视频层之上，会遮住画面底部的
+    // 字幕。这里在 HUD 显隐时同步调整 mpv 字幕位置，让字幕自动避让。
+    void applyStandaloneSubtitleHudOffset(bool hudVisible);
     // 诊断：确认 Qt 是否已为 standalone 覆盖层真正启用 WS_EX_LAYERED（只打一次）。
     void logStandaloneLayerDiagnostics();
     // 独立播放窗口模式：HUD 是原生窗口，淡入淡出（opacity 动画）对其无效，会一直
