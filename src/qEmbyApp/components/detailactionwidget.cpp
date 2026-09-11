@@ -5,6 +5,7 @@
 #include "../utils/playerpreferenceutils.h"
 #include "modernmenubutton.h"
 #include "splitplayerbutton.h"
+#include "flowlayout.h"
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -25,9 +26,11 @@ DetailActionWidget::DetailActionWidget(QWidget *parent) : QWidget(parent) {
   mainLayout->setSpacing(4);
 
   
-  auto *actionsLayout = new QHBoxLayout();
-  actionsLayout->setSpacing(12);
-  actionsLayout->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+  // 用 FlowLayout 而不是 QHBoxLayout：详情页行动作按钮（"继续播放 S01E1"
+  // "重新播放 S01E1" 文字很长）累计宽度常超过容器，QHBoxLayout 不会换行
+  // 会把外置播放器按钮（m_extPlayerBtn）等后面的控件挤出可见区。
+  // FlowLayout 按父宽度自动换行，保证每个按钮都可见。
+  auto *actionsLayout = new FlowLayout(this, 0, 12, 6);
 
   m_resumeBtn = new QPushButton(tr("▶ Resume"), this);
   m_resumeBtn->setObjectName("detail-resume-btn");
