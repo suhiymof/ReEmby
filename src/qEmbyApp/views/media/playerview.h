@@ -122,6 +122,9 @@ private slots:
 
 private:
     void setupUi();
+    // 独立播放窗口模式：把覆盖式 HUD 全部提升为原生子窗口并抬到 MpvWidget 之上，
+    // 避免被 mpv d3d11 直绘的 MpvWidget (WA_NativeWindow) 原生窗口遮盖。
+    void applyStandaloneOverlay();
     void updateTitleElision();
     void updateOverlayLayout();
     void clearMediaSwitcherCache();

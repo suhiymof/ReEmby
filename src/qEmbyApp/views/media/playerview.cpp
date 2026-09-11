@@ -1771,6 +1771,50 @@ void PlayerView::setupUi()
     updateDanmakuButtonState();
     updateMediaSwitcherButton();
     m_rightSidebar->raise();
+
+    // 独立播放窗口模式：HUD 提升为原生子窗口并抬到 mpv 直绘的视频层之上。
+    if (m_standalone) {
+        applyStandaloneOverlay();
+    }
+}
+
+
+
+void PlayerView::applyStandaloneOverlay()
+{
+    // standalone 模式下 MpvWidget 是 WA_NativeWindow 原生子窗口，mpv 用 d3d11
+    // 直绘到它的 HWND。如果覆盖式 HUD 还是普通 QWidget（画在父窗口 backing
+    // store），会被 MpvWidget 的原生窗口盖住。把所有 HUD 提升为 native child
+    // window 并 raise 到 MpvWidget 之上，让 z-order 独立于 backing store。
+    if (!m_standalone || !m_mpvWidget) {
+        return;
+    }
+
+    // 视频层降到最底
+    m_mpvWidget->lower();
+
+    // 收集所有需要浮在视频之上的覆盖式 HUD 控件。
+    // 注：Qt 原生子窗口背景默认不透明，会遮挡视频；本轮先不处理（独立窗口的
+    // HUD 视觉一致性需要重新设计半透明/全屏布局，留作后续工作）。
+    const QList<QWidget *> overlayWidgets = {
+        m_topHUD, m_bottomHUD, m_loadingOverlay, m_osdLayer, m_statisticsOverlay,
+        m_logoLabel, m_currentTimeLabel, m_progressSlider, m_totalTimeLabel,
+        m_prevMediaBtn, m_playPauseBtn, m_rewindBtn, m_forwardBtn, m_nextMediaBtn,
+        m_volumeBtn, m_volumeSlider, m_backBtn, m_titleLabel,
+        m_minBtn, m_maxBtn, m_closeBtn, m_networkSpeedLabel,
+        m_speedBtn, m_mediaSwitchBtn, m_audioBtn, m_subtitleBtn,
+        m_danmakuBtn, m_settingsBtn, m_scaleBtn, m_fullscreenBtn,
+        m_toastLabel, m_nativeDanmakuOverlay, m_rightSidebar, m_rightTrigger,
+    };
+    for (QWidget *w : overlayWidgets) {
+        if (!w) {
+            continue;
+        }
+        // 关键：提升为独立原生子窗口（z-order 独立于 backing store）
+        w->setAttribute(Qt::WA_NativeWindow, true);
+        // 抬到视频层之上
+        w->raise();
+    }
 }
 
 
