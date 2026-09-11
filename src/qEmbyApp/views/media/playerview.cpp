@@ -1949,10 +1949,13 @@ void PlayerView::promoteStandaloneLayer(QWidget *layer)
     // 列表里，若保持普通 QWidget 会被 mpv 直绘的视频层盖住——尤其是弹层高度
     // 超过底部 HUD 区域、向上延伸到视频画面的那些部分。这里在弹层显示前把它
     // 也提升为原生子窗口，使其整体浮在视频之上。
-    // 注意：setAttribute(WA_NativeWindow) 必须在 widget 首次 show 之前调用。
+    // 同时套用与固定 HUD 相同的半透明处理，保证独立窗口里"所有弹出的 UI"
+    // 视觉统一（菜单/对话框背景半透明、文字清晰），而不是只有 HUD 半透明。
+    // 注意：两个属性都必须在 widget 首次 show 之前设置。
     if (!m_standalone || !layer) {
         return;
     }
+    applyStandaloneTranslucency(layer);
     layer->setAttribute(Qt::WA_NativeWindow, true);
 }
 
@@ -5844,7 +5847,10 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
     m_volumeBtn->setIcon(QIcon(m_isMuted ? ":/svg/player/volume-mute.svg" : ":/svg/player/volume.svg"));
 
     
-    m_videoScaleMode = ConfigStore::instance()->get<int>(ConfigKeys::PlayerDefaultScale, 1);
+    // 默认「适应屏幕」（0）：播放区随窗口自适应、比例不符处留黑边（与 PotPlayer
+    // 等播放器一致）。旧的默认值是 1（铺满裁剪），窗口比例与片源不一致时会裁掉
+    // 画面上下/左右——容易被误判成"比例算错了"。
+    m_videoScaleMode = ConfigStore::instance()->get<int>(ConfigKeys::PlayerDefaultScale, 0);
     if (m_nativeDanmakuOverlay) {
         m_nativeDanmakuOverlay->setVideoScaleMode(m_videoScaleMode);
     }
@@ -5873,6 +5879,14 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
         m_mpvWidget->controller()->setProperty("video-unscaled", true);
         break;
     }
+
+    // 诊断：记录本次播放实际生效的画幅模式与播放区尺寸——"播放区没跟着窗口
+    // 自适应"这类问题的第一现场证据（0=适应屏幕 1=铺满裁剪 2=拉伸 3=原始比例）。
+    qInfo().noquote() << "[PlayerView] Video scale mode applied"
+                      << "| mode:" << m_videoScaleMode
+                      << "| standalone:" << m_standalone
+                      << "| videoWidget:"
+                      << QStringLiteral("%1x%2").arg(m_mpvWidget->width()).arg(m_mpvWidget->height());
 
     
     auto startSessionTask = [](QPointer<PlayerView> safeThis, MediaService *s, QString mId, QString sId,

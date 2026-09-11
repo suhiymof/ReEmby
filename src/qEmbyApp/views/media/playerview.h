@@ -339,7 +339,10 @@ private:
     double m_osdSeekPreviewPosition = -1.0;
     
     double m_currentSpeed = 1.0;
-    int m_videoScaleMode = 1;
+    // 画幅模式：0=适应屏幕（保持比例，多余部分留黑边）/ 1=铺满裁剪 / 2=强制拉伸 /
+    // 3=原始比例。默认取 0：与主流播放器（PotPlayer 等）一致——播放区随窗口尺寸
+    // 自适应，比例不符的部分留黑边，而不是裁剪掉画面内容。
+    int m_videoScaleMode = 0;
     
     
     double m_currentVolume = 100.0;
