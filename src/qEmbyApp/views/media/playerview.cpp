@@ -1808,10 +1808,13 @@ void PlayerView::applyStandaloneOverlay()
     // toast、选集抽屉等）随其容器一起渲染：它们若各自成为独立原生 HWND，层内
     // 每个控件都是不透明窗口，既无法统一做半透明，z-order 也更难维持。
     // PlayerOsdLayer 是 QObject（非 QWidget），取它的 container() 容器。
+    // 注意：m_rightTrigger（右侧 15px 鼠标热区）刻意不在此列——它没有背景，
+    // 提升为原生窗口后会渲染成一条黑色窄条；其触发改由 handlePointerActivity
+    // 按坐标命中（见该函数）。
     const QList<QWidget *> overlayWidgets = {
         m_topHUD, m_bottomHUD, m_loadingOverlay, m_statisticsOverlay,
         m_logoLabel, m_networkSpeedLabel, m_nativeDanmakuOverlay,
-        m_rightSidebar, m_rightTrigger,
+        m_rightSidebar,
         m_osdLayer ? m_osdLayer->container() : nullptr,
     };
     for (QWidget *w : overlayWidgets) {
@@ -3403,6 +3406,16 @@ void PlayerView::handlePointerActivity(const QPoint &globalPos)
     if (!rect().contains(localPos))
     {
         return;
+    }
+
+    // standalone 下 m_rightTrigger（窗口右侧 15px 的鼠标热区）被排除在原生提升
+    // 列表之外——它没有背景，提升为原生窗口后会渲染成一条黑色窄条。这里改按
+    // 坐标命中它的区域来弹出选集侧边栏，功能与原生 Enter 事件等价。
+    if (m_standalone && m_rightTrigger && m_rightTrigger->isVisible() &&
+        !m_isRightSidebarVisible &&
+        m_rightTrigger->geometry().contains(localPos))
+    {
+        showRightSidebar();
     }
 
     setCursorHidden(false);
