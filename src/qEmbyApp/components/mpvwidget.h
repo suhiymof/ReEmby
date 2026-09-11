@@ -72,8 +72,7 @@ private:
     static void *getProcAddress(void *ctx, const char *name);
     void loadMediaNow(const QString &url, const QString &serverId, bool wasPending);
     // standalone：把 mpv 自建的渲染子窗口尺寸对齐到本 widget 的客户区。
-    void syncStandaloneRenderArea(const char *when);
-    void logStandaloneRenderDiagnostics(const char *when);
+    void syncStandaloneRenderArea();
 
     MpvController *m_controller;
     MpvHttpStreamRelay *m_streamRelay = nullptr;

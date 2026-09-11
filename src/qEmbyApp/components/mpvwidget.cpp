@@ -69,8 +69,8 @@ MpvWidget::MpvWidget(QWidget *parent, bool standalone)
         // 再补一次稍后的同步：某些片源首个视频帧/解码器初始化较晚，
         // 那时 mpv 才把子窗口建好。
         connect(m_controller, &MpvController::fileLoaded, this, [this]() {
-            QTimer::singleShot(0, this, [this]() { syncStandaloneRenderArea("fileLoaded"); });
-            QTimer::singleShot(400, this, [this]() { syncStandaloneRenderArea("fileLoaded+400ms"); });
+            QTimer::singleShot(0, this, [this]() { syncStandaloneRenderArea(); });
+            QTimer::singleShot(400, this, [this]() { syncStandaloneRenderArea(); });
         });
     }
 }
@@ -257,7 +257,7 @@ void MpvWidget::paintEvent(QPaintEvent *event) {
 void MpvWidget::resizeEvent(QResizeEvent *event) {
     QOpenGLWidget::resizeEvent(event);
     if (m_standalone) {
-        syncStandaloneRenderArea("resize");
+        syncStandaloneRenderArea();
     }
 }
 
@@ -266,11 +266,11 @@ void MpvWidget::showEvent(QShowEvent *event) {
     if (m_standalone) {
         // 首次显示后 widget 才有最终尺寸，且 mpv 的子窗口此时可能还没创建；
         // 排到事件循环之后再同步一次（幂等）。
-        QTimer::singleShot(0, this, [this]() { syncStandaloneRenderArea("show"); });
+        QTimer::singleShot(0, this, [this]() { syncStandaloneRenderArea(); });
     }
 }
 
-void MpvWidget::syncStandaloneRenderArea(const char *when) {
+void MpvWidget::syncStandaloneRenderArea() {
 #ifdef Q_OS_WIN
     if (!m_standalone) {
         return;
@@ -312,27 +312,7 @@ void MpvWidget::syncStandaloneRenderArea(const char *when) {
     }
     SetWindowPos(child, nullptr, 0, 0, target.right, target.bottom,
                  SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS);
-    // 延迟一点再打诊断：等 mpv 处理完 WM_SIZE、重建 swapchain 之后，dwidth/dheight
-    // 才是新值（用 this 作为 context，widget 销毁后自动取消）。
-    QTimer::singleShot(120, this, [this, when]() { logStandaloneRenderDiagnostics(when); });
-#else
-    Q_UNUSED(when);
 #endif
-}
-
-void MpvWidget::logStandaloneRenderDiagnostics(const char *when) {
-    if (!m_standalone || !m_controller) {
-        return;
-    }
-    // dwidth/dheight = mpv 实际渲染出的视频显示尺寸（已按窗口与画幅模式缩放），
-    // 用它可以直接确认"播放区是否跟随 widget 自适应"。
-    const int dw = m_controller->getProperty(QStringLiteral("dwidth")).toInt();
-    const int dh = m_controller->getProperty(QStringLiteral("dheight")).toInt();
-    qInfo().noquote() << "[MpvWidget] standalone render area re-synced"
-                      << "| when:" << when
-                      << "| widget:" << QStringLiteral("%1x%2").arg(width()).arg(height())
-                      << "| dpr:" << devicePixelRatio()
-                      << "| video display:" << QStringLiteral("%1x%2").arg(dw).arg(dh);
 }
 
 

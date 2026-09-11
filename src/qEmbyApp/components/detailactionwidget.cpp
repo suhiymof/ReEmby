@@ -591,7 +591,6 @@ void DetailActionWidget::refreshExtPlayerButton() {
       ConfigStore::instance()->get<bool>(ConfigKeys::ExtPlayerEnable, false);
   if (!extEnabled) {
     m_extPlayerBtn->hide();
-    qDebug().noquote() << "[ExtPlayer] btn hidden | reason: enable=false";
     return;
   }
 
@@ -612,8 +611,6 @@ void DetailActionWidget::refreshExtPlayerButton() {
 
   if (allPlayers.isEmpty()) {
     m_extPlayerBtn->hide();
-    qDebug().noquote() << "[ExtPlayer] btn hidden | reason: no players"
-                       << "| currentPath:" << currentPath;
     return;
   }
 
@@ -623,7 +620,4 @@ void DetailActionWidget::refreshExtPlayerButton() {
     activePlayerPath = allPlayers.first().path;
   }
   m_extPlayerBtn->setPlayers(allPlayers, activePlayerPath);
-  qDebug().noquote() << "[ExtPlayer] btn shown"
-                     << "| players:" << allPlayers.size()
-                     << "| active:" << activePlayerPath;
 }
