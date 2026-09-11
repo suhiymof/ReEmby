@@ -3926,7 +3926,7 @@ void PlayerView::showSpeedMenu()
 {
     auto *panel = new ModernScrollPanel(this);
 
-    QList<double> speeds = {0.5, 1.0, 1.25, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0};
+    QList<double> speeds = {0.5, 1.0, 1.25, 1.5, 1.75, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0};
 
     for (double s : speeds)
     {
