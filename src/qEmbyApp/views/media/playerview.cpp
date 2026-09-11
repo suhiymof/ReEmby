@@ -1893,7 +1893,7 @@ void PlayerView::applyStandaloneLayerAlpha(QWidget *layer)
     const DWORD slwaErr = GetLastError();
     qInfo().noquote() << "[PlayerView] Standalone layer alpha"
                       << "| object:" << layer->objectName()
-                      << "| hwnd:" << static_cast<quintptr>(hwnd)
+                      << "| hwnd:" << reinterpret_cast<quintptr>(hwnd)
                       << "| isWindow:" << (IsWindow(hwnd) != FALSE)
                       << "| classStripped:" << static_cast<quint32>(badClassBits)
                       << "| layeredBefore:" << layeredBefore
