@@ -1820,6 +1820,19 @@ void PlayerView::applyStandaloneOverlay()
     }
 }
 
+void PlayerView::promoteStandaloneLayer(QWidget *layer)
+{
+    // 独立窗口模式下，动态创建的弹层（右上角菜单、设置对话框）不在固定 HUD
+    // 列表里，若保持普通 QWidget 会被 mpv 直绘的视频层盖住——尤其是弹层高度
+    // 超过底部 HUD 区域、向上延伸到视频画面的那些部分。这里在弹层显示前把它
+    // 也提升为原生子窗口，使其整体浮在视频之上。
+    // 注意：setAttribute(WA_NativeWindow) 必须在 widget 首次 show 之前调用。
+    if (!m_standalone || !layer) {
+        return;
+    }
+    layer->setAttribute(Qt::WA_NativeWindow, true);
+}
+
 
 void PlayerView::updateLoadingState()
 {
@@ -1981,6 +1994,8 @@ void PlayerView::trackPlayerDialog(PlayerOverlayDialog *dialog)
             });
 
     showControls();
+    // 独立窗口模式下先提升为原生子窗口，再 open（必须在首次 show 之前）
+    promoteStandaloneLayer(dialog);
     dialog->open();
 }
 
@@ -2092,6 +2107,8 @@ void PlayerView::showCenteredPopup(QWidget *popup, QPushButton *btn)
     }
 
     popup->move(mx, my);
+    // 独立窗口模式下先提升为原生子窗口，再 show（必须在首次 show 之前）
+    promoteStandaloneLayer(popup);
     popup->show();
     popup->raise();
 

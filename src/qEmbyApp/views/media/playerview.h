@@ -125,6 +125,9 @@ private:
     // 独立播放窗口模式：把覆盖式 HUD 全部提升为原生子窗口并抬到 MpvWidget 之上，
     // 避免被 mpv d3d11 直绘的 MpvWidget (WA_NativeWindow) 原生窗口遮盖。
     void applyStandaloneOverlay();
+    // 独立播放窗口模式：动态创建的弹层（菜单/设置对话框）单点提升为原生子窗口，
+    // 让超出固定 HUD 区域的部分也浮在视频层之上（弹层显示前调用）。
+    void promoteStandaloneLayer(QWidget *layer);
     void updateTitleElision();
     void updateOverlayLayout();
     void clearMediaSwitcherCache();
