@@ -1849,12 +1849,21 @@ void PlayerView::applyStandaloneLayerAlpha(QWidget *layer)
     // 走上这条路 HUD 会直接消失（当前不透明，是因为 Qt 根本没把子窗口设成
     // layered，flush 走了 BitBlt，alpha 被丢弃）。
     //
-    // 因此这里不走 Qt 的属性链路，直接用 Win32：Windows 8+ 支持给原生子窗口
-    // 设 WS_EX_LAYERED + SetLayeredWindowAttributes(LWA_ALPHA) 全局 alpha，由
-    // DWM 合成时统一降不透明度。效果是**整层统一半透明**（背景与文字一起变淡），
-    // 与内嵌的 per-pixel 渐变有差距，但是子窗口下能稳定复现的方案。
-    // Qt 在样式重算时可能重写 GWL_EXSTYLE（setWindowLayered 的对称移除），所以
-    // 每次显示覆盖层时都重设一次（幂等），并在日志里回报样式是否被摘掉。
+    // 之前 7160bb5 走的"SetWindowLongPtr(GWL_EXSTYLE, ... | WS_EX_LAYERED) +
+    // SetLayeredWindowAttributes(LWA_ALPHA)" 也失败：日志显示
+    // `layeredAfter: false | applied: false | error: 87`，SLWA 因窗口不是
+    // layered 报 87，SetWindowLongPtr 加不上。根因（MSDN 原文）：
+    //   "If the window has a class style of CS_CLASSDC or CS_PARENTDC,
+    //    do not set the extended window styles WS_EX_COMPOSITED or WS_EX_LAYERED."
+    // 而且拒绝是**静默的**（无 GetLastError、返回 0 与"前值就是 0"无法区分）→
+    // Qt 的原生控件类用了 CS_CLASSDC（DC 共享），所以这条路上 SetWindowLongPtr
+    // 一直是个空操作。
+    //
+    // 修复：先用 SetClassLongPtr(GCL_STYLE) 去掉 CS_CLASSDC / CS_PARENTDC
+    // （对所有用该 Qt 类的控件生效；只是把共享 DC 改为各自 DC，绘制无影响），
+    // 再 SetWindowLongPtr 设 WS_EX_LAYERED + SetLayeredWindowAttributes 全局
+    // alpha。整层统一半透明（背景+文字一起变淡），非内嵌的 per-pixel 渐变。
+    // Qt 在样式重算时可能重写 GWL_EXSTYLE，所以每次显示覆盖层都重设一次（幂等）。
     if (!m_standalone || !layer) {
         return;
     }
@@ -1863,22 +1872,37 @@ void PlayerView::applyStandaloneLayerAlpha(QWidget *layer)
     if (!hwnd) {
         return;
     }
+    // 1) 剥掉阻止 WS_EX_LAYERED 的 class style（一次性，对该 Qt 类的所有窗口生效）
+    const LONG_PTR oldClass = GetClassLongPtr(hwnd, GCL_STYLE);
+    const LONG_PTR badClassBits = oldClass & (CS_CLASSDC | CS_PARENTDC);
+    if (badClassBits) {
+        SetClassLongPtr(hwnd, GCL_STYLE, oldClass & ~badClassBits);
+    }
+    // 2) 加 WS_EX_LAYERED
     const LONG_PTR exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
     const bool layeredBefore = (exStyle & WS_EX_LAYERED) != 0;
-    if (!layeredBefore) {
+    SetLastError(0);
+    const LONG_PTR setResult =
         SetWindowLongPtr(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
-    }
+    const DWORD setErr = GetLastError();
+    const bool layeredAfter = (GetWindowLongPtr(hwnd, GWL_EXSTYLE) & WS_EX_LAYERED) != 0;
+    // 3) SLWA：要求先已 layered；不 layered 必报 87（ERROR_INVALID_PARAMETER）
+    SetLastError(0);
     const BOOL applied =
         SetLayeredWindowAttributes(hwnd, 0, kStandaloneLayerAlpha, LWA_ALPHA);
-    const bool layeredAfter =
-        (GetWindowLongPtr(hwnd, GWL_EXSTYLE) & WS_EX_LAYERED) != 0;
+    const DWORD slwaErr = GetLastError();
     qInfo().noquote() << "[PlayerView] Standalone layer alpha"
                       << "| object:" << layer->objectName()
+                      << "| hwnd:" << static_cast<quintptr>(hwnd)
+                      << "| isWindow:" << (IsWindow(hwnd) != FALSE)
+                      << "| classStripped:" << static_cast<quint32>(badClassBits)
                       << "| layeredBefore:" << layeredBefore
+                      << "| setResult:" << static_cast<qintptr>(setResult)
+                      << "| setErr:" << setErr
                       << "| layeredAfter:" << layeredAfter
                       << "| alpha:" << kStandaloneLayerAlpha
                       << "| applied:" << (applied != FALSE)
-                      << "| error:" << static_cast<quint32>(GetLastError());
+                      << "| slwaErr:" << slwaErr;
 #else
     Q_UNUSED(layer);
 #endif
