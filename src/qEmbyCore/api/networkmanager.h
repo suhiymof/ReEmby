@@ -94,6 +94,12 @@ public:
                                             const QMap<QString, QString>& headers,
                                             const NetworkRequestOptions& options = {});
 
+signals:
+    // 服务器不可用（HTTP 5xx，如 504 Gateway Time-out）或请求超时时发出，
+    // 供 UI 层弹出全局提示，避免用户把"服务端故障"误判成客户端问题。
+    // 内置节流（见 kServerUnavailableThrottleMs），批量请求同时失败时只提示一次。
+    void serverUnavailable(int httpStatus);
+
 private:
     QNetworkAccessManager* m_networkManager;
 
@@ -104,6 +110,10 @@ private:
     QJsonObject parseReply(QNetworkReply* reply);
     QString parseReplyAsText(QNetworkReply* reply);
     QByteArray parseReplyAsBytes(QNetworkReply* reply, const QString& requestKind);
+
+    // 服务器不可用（HTTP 5xx / 请求超时）时发出 serverUnavailable 信号；
+    // 内置 30s 节流（跨请求类型共享），批量请求同时失败只提示一次。
+    void notifyServerUnavailableIfNeeded(QNetworkReply* reply, int httpStatus);
 };
 
 #endif 

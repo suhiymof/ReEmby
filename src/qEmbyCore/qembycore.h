@@ -27,6 +27,8 @@ public:
     AdminService* adminService() const; 
     DanmakuService* danmakuService() const;
     IntroDBService* introDBService() const;
+    // 供 UI 层连接 NetworkManager 的信号（如 serverUnavailable）。
+    NetworkManager* networkManager() const;
 
 private:
     

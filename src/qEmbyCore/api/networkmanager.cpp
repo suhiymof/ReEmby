@@ -1,4 +1,5 @@
 #include "networkmanager.h"
+#include <QElapsedTimer>
 #include <QJsonArray>
 #include <QJsonParseError>
 #include <QJsonValue>
@@ -192,6 +193,29 @@ void NetworkManager::attachReplyHandlers(QNetworkReply* reply,
             });
 }
 
+void NetworkManager::notifyServerUnavailableIfNeeded(QNetworkReply* reply,
+                                                     int httpStatus) {
+    const bool serverUnavailable =
+        httpStatus >= 500 ||
+        (reply && reply->error() == QNetworkReply::TimeoutError);
+    if (!serverUnavailable) {
+        return;
+    }
+
+    // 30s 内只提示一次：媒体库列表 / 续播 / 详情等请求会同时失败。
+    // 函数内静态变量跨实例、跨请求类型共享同一个节流窗口。
+    static QElapsedTimer s_throttle;
+    constexpr qint64 kThrottleMs = 30000;
+    if (s_throttle.isValid() && s_throttle.elapsed() < kThrottleMs) {
+        return;
+    }
+    s_throttle.restart();
+
+    qInfo().noquote() << "[NetworkManager] Server unavailable -> notify UI"
+                      << "| httpStatus:" << httpStatus;
+    emit serverUnavailable(httpStatus);
+}
+
 QString NetworkManager::buildReplyErrorMessage(QNetworkReply* reply,
                                                int httpStatus) {
     QString errorMsg =
@@ -232,6 +256,7 @@ QJsonObject NetworkManager::parseReply(QNetworkReply* reply) {
                    << "| responseBody:" << responseBody.left(500);
         
         QString errorMsg = buildReplyErrorMessage(reply, httpStatus);
+        notifyServerUnavailableIfNeeded(reply, httpStatus);
         throw std::runtime_error(errorMsg.toStdString());
     }
 
@@ -406,6 +431,7 @@ QString NetworkManager::parseReplyAsText(QNetworkReply* reply) {
                    << "| sslErrors:"
                    << reply->property("sslErrorsSummary").toString();
         QString errorMsg = buildReplyErrorMessage(reply, httpStatus);
+        notifyServerUnavailableIfNeeded(reply, httpStatus);
         throw std::runtime_error(errorMsg.toStdString());
     }
 
@@ -511,6 +537,7 @@ QByteArray NetworkManager::parseReplyAsBytes(QNetworkReply* reply,
                    << "| sslErrors:"
                    << reply->property("sslErrorsSummary").toString();
         QString errorMsg = buildReplyErrorMessage(reply, httpStatus);
+        notifyServerUnavailableIfNeeded(reply, httpStatus);
         throw std::runtime_error(errorMsg.toStdString());
     }
 

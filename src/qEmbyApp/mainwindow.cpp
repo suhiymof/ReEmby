@@ -13,6 +13,8 @@
 #include "config/config_keys.h"    
 #include "utils/contextmenuutils.h"
 #include <services/manager/servermanager.h>
+#include <api/networkmanager.h>
+#include "components/moderntoast.h"
 #include <QStackedWidget>
 #include <QDebug>
 #include <QApplication>
@@ -90,6 +92,17 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
     m_core = new QEmbyCore(this);
+
+    // 服务器不可用（HTTP 5xx，如 nginx 504 Gateway Time-out）或请求超时时
+    // 弹全局提示。否则媒体库只会显示占位卡片、点不动，用户容易误判成客户端
+    // 故障。NetworkManager 侧已做 30s 节流，批量请求失败也只提示一次。
+    connect(m_core->networkManager(), &NetworkManager::serverUnavailable, this,
+            [this](int httpStatus) {
+                ModernToast::showMessage(
+                    tr("服务器无响应（HTTP %1），请检查 Emby 服务或反向代理")
+                        .arg(httpStatus),
+                    5000);
+            });
 
     
     m_trayManager = new TrayManager(this);

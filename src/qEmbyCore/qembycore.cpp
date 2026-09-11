@@ -77,3 +77,8 @@ IntroDBService* QEmbyCore::introDBService() const
 {
     return m_introDBService;
 }
+
+NetworkManager* QEmbyCore::networkManager() const
+{
+    return m_networkManager;
+}
