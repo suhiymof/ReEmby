@@ -121,7 +121,8 @@ DetailActionWidget::DetailActionWidget(QWidget *parent) : QWidget(parent) {
   actionsLayout->addWidget(m_danmakuRematchBtn);
   actionsLayout->addWidget(m_danmakuClearBtn);
   actionsLayout->addWidget(m_progressWidget);
-  actionsLayout->addStretch();
+  // 注意：FlowLayout 没有 addStretch()（那是 QBoxLayout 的方法）——流式布局
+  // 本身就是左对齐逐行排布，不需要尾部弹簧。
 
   
   auto *streamSelectorsLayout = new QHBoxLayout();
