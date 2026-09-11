@@ -125,11 +125,10 @@ private:
     // 独立播放窗口模式：把覆盖式 HUD 全部提升为原生子窗口并抬到 MpvWidget 之上，
     // 避免被 mpv d3d11 直绘的 MpvWidget (WA_NativeWindow) 原生窗口遮盖。
     void applyStandaloneOverlay();
-    // 独立播放窗口模式：给原生子窗口设 WS_EX_LAYERED + 全局 alpha（LWA_ALPHA），
-    // 由 DWM 合成半透明。不要用 WA_TranslucentBackground —— 那会让 Qt 的 flush
-    // 走 UpdateLayeredWindow（仅顶层窗口可用，子窗口上失败且无兜底）→ HUD 消失。
-    void applyStandaloneLayerAlpha(QWidget *layer);
-    // 诊断：确认 Qt 是否已为 standalone 覆盖层真正启用 WS_EX_LAYERED（只打一次）。
+    // 独立播放窗口模式：给原生子窗口设 WA_TranslucentBackground → Qt 内部
+    // per-pixel alpha 合成（UpdateLayeredWindow + BLENDFUNCTION{AC_SRC_ALPHA}）。
+    // 不要再手动 SetWindowLongPtr(WS_EX_LAYERED)：applyWindowFlags 会整体
+    // 覆写 GWL_EXSTYLE（重算值不带该位）→ 手动加的位被擦掉。
     void logStandaloneLayerDiagnostics();
     // 独立播放窗口模式：HUD 是原生窗口，淡入淡出（opacity 动画）对其无效，会一直
     // 常驻；改用 setVisible 显隐（子控件随容器一起显隐）。

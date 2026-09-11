@@ -76,9 +76,10 @@ constexpr int kHudAutoHideDelayMs = 1800;
 // 独立播放窗口（standalone）下 HUD 是原生窗口、靠 setVisible 显隐，停留时间
 // 比内嵌略长一点。
 constexpr int kStandaloneHudAutoHideDelayMs = 2000;
-// standalone 覆盖层（原生子窗口）的全局不透明度（LWA_ALPHA，0-255）。
-// 200 ≈ 78%：明显能透出视频，文字仍可读。
-constexpr int kStandaloneLayerAlpha = 200;
+// 半透明改走 Qt 属性链路（WA_TranslucentBackground → 内部 per-pixel alpha
+// 合成）；不再使用 SetLayeredWindowAttributes。kStandaloneLayerAlpha 作为
+// 备查留作 historical note —— 启用 LWA 路径时取消下面这行的注释即可。
+// constexpr int kStandaloneLayerAlpha = 200;
 
 // 纯 Dolby Vision（profile 5，无 HDR10/SDR 兼容层）。硬解会把携带 DV
 // 元数据的 RPU NAL 丢弃，mpv 无法应用 fallback 色彩映射 → 画面发绿。
@@ -1829,83 +1830,22 @@ void PlayerView::applyStandaloneOverlay()
         if (!w || w->parentWidget() != this) {
             continue;
         }
-        // 先声明原生窗口，再设 layered + 全局 alpha（applyStandaloneLayerAlpha
-        // 内部会 winId() 强制创建原生窗口，必须发生在 WA_NativeWindow 之后）。
+        // **顺序关键**：必须先设 WA_TranslucentBackground（让 Qt 知道这是
+        // translucent widget，写入 surface format 的 hasAlpha 位），**再**设
+        // WA_NativeWindow 触发原生窗口创建。Qt 内部 setWindowLayered() 的
+        // 判定式是 `(hasAlpha && hasNoNativeFrame(hwnd, flags))`；对 WS_CHILD
+        // hasNoNativeFrame 直接返回 true，所以满足条件时会自动加 WS_EX_LAYERED
+        // 并用 UpdateLayeredWindow(BLENDFUNCTION{AC_SRC_OVER,0,alpha,AC_SRC_ALPHA})
+        // 做真正的 per-pixel alpha 合成 —— 背景的 rgba 渐变会原样透出。
+        //
+        // **不要**自己 SetWindowLongPtr(GWL_EXSTYLE, … | WS_EX_LAYERED)：
+        // applyWindowFlags() 会在 setAttribute/构造期间整体覆写 GWL_EXSTYLE
+        // （重算值从不带 WS_EX_LAYERED），把手动加的位擦掉。
+        w->setAttribute(Qt::WA_TranslucentBackground, true);
         w->setAttribute(Qt::WA_NativeWindow, true);
-        applyStandaloneLayerAlpha(w);
         // 抬到视频层之上
         w->raise();
     }
-}
-
-void PlayerView::applyStandaloneLayerAlpha(QWidget *layer)
-{
-    // 目标：覆盖层在 mpv d3d11 直绘的视频层之上呈现半透明。
-    //
-    // 为什么不用 Qt::WA_TranslucentBackground（2026-09-11 实测无效 + 源码查证）：
-    // QWindowsBackingStore::flush() 只有在 `isLayered() && format().hasAlpha()`
-    // 时才走 UpdateLayeredWindowIndirect，且**失败没有 BitBlt 兜底**；而
-    // UpdateLayeredWindow 官方只支持顶层窗口，对 WS_CHILD 子窗口会失败 —— 一旦
-    // 走上这条路 HUD 会直接消失（当前不透明，是因为 Qt 根本没把子窗口设成
-    // layered，flush 走了 BitBlt，alpha 被丢弃）。
-    //
-    // 之前 7160bb5 走的"SetWindowLongPtr(GWL_EXSTYLE, ... | WS_EX_LAYERED) +
-    // SetLayeredWindowAttributes(LWA_ALPHA)" 也失败：日志显示
-    // `layeredAfter: false | applied: false | error: 87`，SLWA 因窗口不是
-    // layered 报 87，SetWindowLongPtr 加不上。根因（MSDN 原文）：
-    //   "If the window has a class style of CS_CLASSDC or CS_PARENTDC,
-    //    do not set the extended window styles WS_EX_COMPOSITED or WS_EX_LAYERED."
-    // 而且拒绝是**静默的**（无 GetLastError、返回 0 与"前值就是 0"无法区分）→
-    // Qt 的原生控件类用了 CS_CLASSDC（DC 共享），所以这条路上 SetWindowLongPtr
-    // 一直是个空操作。
-    //
-    // 修复：先用 SetClassLongPtr(GCL_STYLE) 去掉 CS_CLASSDC / CS_PARENTDC
-    // （对所有用该 Qt 类的控件生效；只是把共享 DC 改为各自 DC，绘制无影响），
-    // 再 SetWindowLongPtr 设 WS_EX_LAYERED + SetLayeredWindowAttributes 全局
-    // alpha。整层统一半透明（背景+文字一起变淡），非内嵌的 per-pixel 渐变。
-    // Qt 在样式重算时可能重写 GWL_EXSTYLE，所以每次显示覆盖层都重设一次（幂等）。
-    if (!m_standalone || !layer) {
-        return;
-    }
-#ifdef Q_OS_WIN
-    const HWND hwnd = reinterpret_cast<HWND>(layer->winId());
-    if (!hwnd) {
-        return;
-    }
-    // 1) 剥掉阻止 WS_EX_LAYERED 的 class style（一次性，对该 Qt 类的所有窗口生效）
-    const LONG_PTR oldClass = GetClassLongPtr(hwnd, GCL_STYLE);
-    const LONG_PTR badClassBits = oldClass & (CS_CLASSDC | CS_PARENTDC);
-    if (badClassBits) {
-        SetClassLongPtr(hwnd, GCL_STYLE, oldClass & ~badClassBits);
-    }
-    // 2) 加 WS_EX_LAYERED
-    const LONG_PTR exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
-    const bool layeredBefore = (exStyle & WS_EX_LAYERED) != 0;
-    SetLastError(0);
-    const LONG_PTR setResult =
-        SetWindowLongPtr(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
-    const DWORD setErr = GetLastError();
-    const bool layeredAfter = (GetWindowLongPtr(hwnd, GWL_EXSTYLE) & WS_EX_LAYERED) != 0;
-    // 3) SLWA：要求先已 layered；不 layered 必报 87（ERROR_INVALID_PARAMETER）
-    SetLastError(0);
-    const BOOL applied =
-        SetLayeredWindowAttributes(hwnd, 0, kStandaloneLayerAlpha, LWA_ALPHA);
-    const DWORD slwaErr = GetLastError();
-    qInfo().noquote() << "[PlayerView] Standalone layer alpha"
-                      << "| object:" << layer->objectName()
-                      << "| hwnd:" << reinterpret_cast<quintptr>(hwnd)
-                      << "| isWindow:" << (IsWindow(hwnd) != FALSE)
-                      << "| classStripped:" << static_cast<quint32>(badClassBits)
-                      << "| layeredBefore:" << layeredBefore
-                      << "| setResult:" << static_cast<qintptr>(setResult)
-                      << "| setErr:" << setErr
-                      << "| layeredAfter:" << layeredAfter
-                      << "| alpha:" << kStandaloneLayerAlpha
-                      << "| applied:" << (applied != FALSE)
-                      << "| slwaErr:" << slwaErr;
-#else
-    Q_UNUSED(layer);
-#endif
 }
 
 void PlayerView::logStandaloneLayerDiagnostics()
@@ -1966,15 +1906,9 @@ void PlayerView::setStandaloneHudVisible(bool visible)
         m_networkSpeedLabel->setVisible(visible);
     }
     if (visible) {
-        // 每次显示都重设 layered + 全局 alpha：Qt 在样式重算时可能摘掉
-        // WS_EX_LAYERED（setWindowLayered 的对称移除），这里幂等补回。
-        applyStandaloneLayerAlpha(m_topHUD);
-        applyStandaloneLayerAlpha(m_bottomHUD);
-        applyStandaloneLayerAlpha(m_logoLabel);
-        if (m_networkSpeedLabel && m_showNetworkSpeed) {
-            applyStandaloneLayerAlpha(m_networkSpeedLabel);
-        }
-        // 首次显示后确认 WS_EX_LAYERED 是否真的在（只打一次）
+        // 首次显示后确认 Qt 是否真的把覆盖层设成 per-pixel translucent
+        // （hasAlpha + hasNoNativeFrame(WS_CHILD) 满足 → 内部加 WS_EX_LAYERED
+        // 并走 UpdateLayeredWindow 合成路径）。只打一次。
         logStandaloneLayerDiagnostics();
     }
 
@@ -1988,14 +1922,14 @@ void PlayerView::promoteStandaloneLayer(QWidget *layer)
     // 列表里，若保持普通 QWidget 会被 mpv 直绘的视频层盖住——尤其是弹层高度
     // 超过底部 HUD 区域、向上延伸到视频画面的那些部分。这里在弹层显示前把它
     // 也提升为原生子窗口，使其整体浮在视频之上。
-    // 同时套用与固定 HUD 相同的半透明处理（WS_EX_LAYERED + 全局 alpha），保证
-    // 独立窗口里"所有弹出的 UI"视觉统一，而不是只有 HUD 半透明。
-    // 注意：WA_NativeWindow 必须在首次 show 之前设置；alpha 依赖 HWND，放在其后。
+    // 半透明由 WA_TranslucentBackground 属性驱动，Qt 在原生窗口初始化时按
+    // `hasAlpha && hasNoNativeFrame(WS_CHILD)` 加 WS_EX_LAYERED + per-pixel
+    // alpha 合成。**属性必须在 WA_NativeWindow 之前设**。
     if (!m_standalone || !layer) {
         return;
     }
+    layer->setAttribute(Qt::WA_TranslucentBackground, true);
     layer->setAttribute(Qt::WA_NativeWindow, true);
-    applyStandaloneLayerAlpha(layer);
 }
 
 
@@ -2715,9 +2649,8 @@ QCoro::Task<void> PlayerView::showRightSidebar()
     }
 
     showControls();
-
-    // standalone：侧边栏已 show，补一次 layered + 全局 alpha（Qt 可能重算样式）
-    applyStandaloneLayerAlpha(m_rightSidebar);
+    // 侧边栏的半透明在 showRightSidebar() 自身调用 promoteStandaloneLayer 时
+    // 已设好（WA_TranslucentBackground 在 WA_NativeWindow 之前），无需再补。
 
     if (m_switcherCacheReady && m_switcherCacheMediaId == m_currentMediaId)
     {
