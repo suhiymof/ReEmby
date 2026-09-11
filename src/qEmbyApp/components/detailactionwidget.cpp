@@ -26,11 +26,16 @@ DetailActionWidget::DetailActionWidget(QWidget *parent) : QWidget(parent) {
   mainLayout->setSpacing(4);
 
   
-  // 用 FlowLayout 而不是 QHBoxLayout：详情页行动作按钮（"继续播放 S01E1"
-  // "重新播放 S01E1" 文字很长）累计宽度常超过容器，QHBoxLayout 不会换行
-  // 会把外置播放器按钮（m_extPlayerBtn）等后面的控件挤出可见区。
-  // FlowLayout 按父宽度自动换行，保证每个按钮都可见。
-  auto *actionsLayout = new FlowLayout(this, 0, 12, 6);
+  // FlowLayout 在父 widget 未布局时 sizeHint() 返回 minimumSize（≈30px），
+  // QVBoxLayout 据此分配 30px 高度——按钮 sizeHint 通常高于此，导致 actionsLayout
+  // 整行不可见（用户截图中 "继续播放 / 重新播放" 按钮全消失）。临时回退到
+  // QHBoxLayout + 设最小高度：保证可见；窗口窄时按钮溢出仍可能，但至少不消失。
+  // TODO: 用 QHBoxLayout + FlowLayout 二选一彻底解决（要么接受 overflow 要么修
+  // FlowLayout 的 sizeHint 在未布局时返回合理 fall-back）。
+  auto *actionsLayout = new QHBoxLayout();
+  actionsLayout->setSpacing(12);
+  actionsLayout->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+  setMinimumHeight(56);
 
   m_resumeBtn = new QPushButton(tr("▶ Resume"), this);
   m_resumeBtn->setObjectName("detail-resume-btn");
