@@ -58,6 +58,10 @@ protected:
     // standalone 模式不触发 QOpenGLWidget 的 GL 合成（避免与 mpv d3d11 直绘
     // 争抢同一原生 HWND），直接吞掉 paint 事件。
     void paintEvent(QPaintEvent *event) override;
+    // standalone 模式：widget 尺寸变化 / 首次显示时，主动把 mpv 的渲染区同步成
+    // widget 客户区大小（wid 下 mpv 不一定收得到 Qt 的尺寸变化通知）。
+    void resizeEvent(QResizeEvent *event) override;
+    void showEvent(QShowEvent *event) override;
 
 private slots:
     void cleanupGL(); 

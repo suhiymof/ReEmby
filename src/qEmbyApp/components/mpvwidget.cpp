@@ -290,7 +290,8 @@ void MpvWidget::syncStandaloneRenderArea(const char *when) {
     // 表现为"播放区没有自适应比例"）。这里在 widget 尺寸变化/首次显示/开始播放
     // 后直接把 mpv 子窗口设为 widget 客户区大小，等同于补一次漏掉的同步。
     // 幂等：尺寸一致时直接返回，不重复 SetWindowPos。
-    const HWND child = FindWindowExW(parentHwnd, nullptr, kMpvWindowClass, nullptr);
+    // 注意：child 不能是 const —— 下面类名查找失败时还要再赋值一次。
+    HWND child = FindWindowExW(parentHwnd, nullptr, kMpvWindowClass, nullptr);
     if (!child) {
         // 类名兜底（mpv 的窗口类名若有变化，就取第一个子窗口）。
         if (!(child = FindWindowExW(parentHwnd, nullptr, nullptr, nullptr))) {
