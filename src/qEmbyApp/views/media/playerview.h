@@ -125,6 +125,11 @@ private:
     // 独立播放窗口模式：把覆盖式 HUD 全部提升为原生子窗口并抬到 MpvWidget 之上，
     // 避免被 mpv d3d11 直绘的 MpvWidget (WA_NativeWindow) 原生窗口遮盖。
     void applyStandaloneOverlay();
+    // B3 spike：创建/复用透明 HUD 顶层窗口（owned by 播放窗口），并把
+    // m_topHUD/m_bottomHUD reparent 进去。
+    void ensureStandaloneHudWindow();
+    // B3 spike：把 HUD 透明窗口的几何同步到 PlayerView 客户区（全局坐标）。
+    void syncStandaloneHudWindow();
     // 独立播放窗口模式：给原生子窗口设 WA_TranslucentBackground → Qt 内部
     // per-pixel alpha 合成（UpdateLayeredWindow + BLENDFUNCTION{AC_SRC_ALPHA}）。
     // 不要再手动 SetWindowLongPtr(WS_EX_LAYERED)：applyWindowFlags 会整体
@@ -232,6 +237,10 @@ private:
         QString serverId = QString());
 
     MpvWidget *m_mpvWidget;
+    // B3 spike：独立播放（wid）模式下的透明 HUD 顶层窗口。顶层窗口支持
+    // per-pixel alpha（区别于 WS_CHILD 子窗口），m_topHUD/m_bottomHUD reparent
+    // 进它之后，QSS 的 rgba 渐变背景能真正透出 mpv 渲染的视频。
+    QWidget *m_hudWindow = nullptr;
     NativeDanmakuOverlay *m_nativeDanmakuOverlay = nullptr;
     // true = 独立播放窗口（mpv 走 gpu-next + wid 自建渲染，支持杜比视界 P5）。
     bool m_standalone = false;

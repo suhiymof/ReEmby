@@ -45,6 +45,7 @@
 #include <QUrlQuery>
 #include <QVBoxLayout>
 #include <QWheelEvent>
+#include <QWindow>
 #include <fileutils.h>
 
 #include <QVector>
@@ -597,6 +598,12 @@ PlayerView::~PlayerView()
 {
     disconnect(this, &PlayerView::playerChromeVisibilityChanged, nullptr, nullptr);
     beginViewTeardown();
+    // B3 spike：销毁透明 HUD 顶层窗口。m_topHUD/m_bottomHUD 已 reparent 进去，
+    // 随它一起删除（必须先于 QWidget 基类析构删，避免悬空父指针）。
+    if (m_hudWindow) {
+        m_hudWindow->deleteLater();
+        m_hudWindow = nullptr;
+    }
     stopAndReport();
 }
 
@@ -1804,7 +1811,7 @@ void PlayerView::applyStandaloneOverlay()
 {
     // standalone 模式下 MpvWidget 是 WA_NativeWindow 原生子窗口，mpv 用 d3d11
     // 直绘到它的 HWND。普通 QWidget 画在父窗口 backing store 上，会被原生窗口
-    // 盖住，因此 HUD 必须同样提升为原生子窗口，z-order 才能高于视频层。
+    // 盖住，因此覆盖层必须同样提升为原生子窗口才能浮在视频层之上。
     if (!m_standalone || !m_mpvWidget) {
         return;
     }
@@ -1812,15 +1819,38 @@ void PlayerView::applyStandaloneOverlay()
     // 视频层降到最底
     m_mpvWidget->lower();
 
-    // 只提升 PlayerView 的直接子容器（顶层覆盖层）。嵌套子控件（进度条、按钮、
-    // toast、选集抽屉等）随其容器一起渲染：它们若各自成为独立原生 HWND，层内
-    // 每个控件都是不透明窗口，既无法统一做半透明，z-order 也更难维持。
+    // ---- B3 spike：topHUD/bottomHUD 挪进透明顶层窗口 ----
+    // 原生子窗口（WS_CHILD）不支持 per-pixel alpha（UpdateLayeredWindow 仅顶层
+    // 窗口可用），所以嵌在主窗口里的 HUD 永远不透明。改为：创建一个透明的
+    // 顶层 HUD 窗口（Qt 对顶层窗口完整支持 WA_TranslucentBackground），
+    // 把两个 HUD reparent 进去。z-order 由 owned-window 关系保证（HUD 窗口
+    // 永远在播放窗口之上，自然也在其内部的 mpv 视频之上）。
+    ensureStandaloneHudWindow();
+    if (m_hudWindow) {
+        if (m_topHUD && m_topHUD->parentWidget() != m_hudWindow) {
+            const QRect topGeo = m_topHUD->geometry();
+            m_topHUD->setParent(m_hudWindow);
+            m_topHUD->setGeometry(topGeo);
+            m_topHUD->show();
+        }
+        if (m_bottomHUD && m_bottomHUD->parentWidget() != m_hudWindow) {
+            const QRect bottomGeo = m_bottomHUD->geometry();
+            m_bottomHUD->setParent(m_hudWindow);
+            m_bottomHUD->setGeometry(bottomGeo);
+            m_bottomHUD->show();
+        }
+        syncStandaloneHudWindow();
+    }
+
+    // 其余覆盖层（台标/网速/侧边栏/统计/加载/OSD/弹幕）暂保持原 native 提升
+    // 逻辑不变 —— spike 只验证 topHUD/bottomHUD 的半透明，验证通过后再逐个
+    // 迁移进透明 HUD 窗口。
     // PlayerOsdLayer 是 QObject（非 QWidget），取它的 container() 容器。
     // 注意：m_rightTrigger（右侧 15px 鼠标热区）刻意不在此列——它没有背景，
     // 提升为原生窗口后会渲染成一条黑色窄条；其触发改由 handlePointerActivity
     // 按坐标命中（见该函数）。
     const QList<QWidget *> overlayWidgets = {
-        m_topHUD, m_bottomHUD, m_loadingOverlay, m_statisticsOverlay,
+        m_loadingOverlay, m_statisticsOverlay,
         m_logoLabel, m_networkSpeedLabel, m_nativeDanmakuOverlay,
         m_rightSidebar,
         m_osdLayer ? m_osdLayer->container() : nullptr,
@@ -1830,17 +1860,6 @@ void PlayerView::applyStandaloneOverlay()
         if (!w || w->parentWidget() != this) {
             continue;
         }
-        // **顺序关键**：必须先设 WA_TranslucentBackground（让 Qt 知道这是
-        // translucent widget，写入 surface format 的 hasAlpha 位），**再**设
-        // WA_NativeWindow 触发原生窗口创建。Qt 内部 setWindowLayered() 的
-        // 判定式是 `(hasAlpha && hasNoNativeFrame(hwnd, flags))`；对 WS_CHILD
-        // hasNoNativeFrame 直接返回 true，所以满足条件时会自动加 WS_EX_LAYERED
-        // 并用 UpdateLayeredWindow(BLENDFUNCTION{AC_SRC_OVER,0,alpha,AC_SRC_ALPHA})
-        // 做真正的 per-pixel alpha 合成 —— 背景的 rgba 渐变会原样透出。
-        //
-        // **不要**自己 SetWindowLongPtr(GWL_EXSTYLE, … | WS_EX_LAYERED)：
-        // applyWindowFlags() 会在 setAttribute/构造期间整体覆写 GWL_EXSTYLE
-        // （重算值从不带 WS_EX_LAYERED），把手动加的位擦掉。
         w->setAttribute(Qt::WA_TranslucentBackground, true);
         w->setAttribute(Qt::WA_NativeWindow, true);
         // 抬到视频层之上
@@ -1848,11 +1867,54 @@ void PlayerView::applyStandaloneOverlay()
     }
 }
 
+void PlayerView::ensureStandaloneHudWindow()
+{
+    if (!m_standalone || m_hudWindow) {
+        return;
+    }
+    // 透明顶层窗口：Qt 对顶层窗口的 per-pixel alpha 是完整支持的
+    //（UpdateLayeredWindow / DWM 合成），区别于 WS_CHILD 子窗口那条死路。
+    // Tool + ShowWithoutActivating：不进任务栏、不抢播放窗口焦点。
+    m_hudWindow = new QWidget(nullptr, Qt::FramelessWindowHint | Qt::Tool);
+    m_hudWindow->setAttribute(Qt::WA_TranslucentBackground, true);
+    m_hudWindow->setAttribute(Qt::WA_ShowWithoutActivating, true);
+    // HUD 窗口自身的鼠标活动也要喂给 PlayerView 的显隐逻辑（鼠标在视频区
+    // 挪动时 HUD 要保持显示）。
+    m_hudWindow->installEventFilter(this);
+    // 此刻不 show()：PlayerView 多半还没显示，mapToGlobal 坐标无效，show 会在
+    // 屏幕 (0,0) 闪现。首次显示交给 setStandaloneHudVisible(true)（那时
+    // showControls 已在真实几何下运行）。
+    // 强制创建原生窗口，让 transientParent（owned 关系）可以设置。
+    m_hudWindow->winId();
+    // 播放窗口移动/缩放/显示时同步 HUD 窗口位置
+    if (QWidget *top = window()) {
+        top->installEventFilter(this);
+    }
+}
+
+void PlayerView::syncStandaloneHudWindow()
+{
+    // HUD 窗口铺满 PlayerView 的客户区（全局坐标）。origin 与 PlayerView
+    // 重合，因此 topHUD/bottomHUD reparent 后的相对坐标无需换算。
+    if (!m_standalone || !m_hudWindow) {
+        return;
+    }
+    // owned-window 关系（transientParent）：播放窗口首次 show 后 windowHandle
+    // 才有效，所以在这里幂等补设（未设且能设就设）。
+    if (window() && window()->windowHandle() && m_hudWindow->windowHandle() &&
+        m_hudWindow->windowHandle()->transientParent() != window()->windowHandle()) {
+        m_hudWindow->windowHandle()->setTransientParent(window()->windowHandle());
+    }
+    const QPoint globalOrigin = mapToGlobal(QPoint(0, 0));
+    m_hudWindow->setGeometry(globalOrigin.x(), globalOrigin.y(), width(), height());
+}
+
 void PlayerView::logStandaloneLayerDiagnostics()
 {
-    // 只在首次显示时打一次，避免 HUD 频繁显隐刷屏。用于确认 Qt 是否真的为原生
-    // 子窗口启用了 WS_EX_LAYERED —— 若为 false，说明 Qt 没有走 per-pixel alpha
-    // 路径，半透明不会生效，需要换实现方案。
+    // 只在首次显示时打一次，避免 HUD 频繁显隐刷屏。B3 spike 后验证对象变为
+    // 透明 HUD 顶层窗口（topHUD/bottomHUD 的载体）：确认 Qt 是否真的为它启用
+    // 了 WS_EX_LAYERED —— 若为 false，说明 Qt 没有走 per-pixel alpha 路径，
+    // 半透明不会生效，需要换实现方案。
     if (!m_standalone) {
         return;
     }
@@ -1862,7 +1924,7 @@ void PlayerView::logStandaloneLayerDiagnostics()
     }
     s_logged = true;
 
-    const QList<QWidget *> layers = {m_topHUD, m_bottomHUD, m_rightSidebar};
+    const QList<QWidget *> layers = {m_hudWindow, m_rightSidebar};
     for (QWidget *w : layers) {
         if (!w) {
             continue;
@@ -1877,7 +1939,8 @@ void PlayerView::logStandaloneLayerDiagnostics()
         Q_UNUSED(id);
 #endif
         qInfo().noquote() << "[PlayerView] Standalone layer diag"
-                          << "| object:" << w->objectName()
+                          << "| object:" << (w == m_hudWindow ? QStringLiteral("hudWindow") : w->objectName())
+                          << "| isTopLevel:" << w->isWindow()
                           << "| wsExLayered:" << layered
                           << "| translucentAttr:"
                           << w->testAttribute(Qt::WA_TranslucentBackground)
@@ -1892,11 +1955,14 @@ void PlayerView::setStandaloneHudVisible(bool visible)
     if (!m_standalone) {
         return;
     }
-    if (m_topHUD) {
-        m_topHUD->setVisible(visible);
-    }
-    if (m_bottomHUD) {
-        m_bottomHUD->setVisible(visible);
+    // B3 spike：topHUD/bottomHUD 已 reparent 进透明 HUD 顶层窗口，
+    // 显隐直接控制 HUD 窗口（内部控件随之）。显示前先同步几何，
+    // 避免首次显示时在旧坐标/零尺寸下闪现。
+    if (m_hudWindow) {
+        if (visible) {
+            syncStandaloneHudWindow();
+        }
+        m_hudWindow->setVisible(visible);
     }
     if (m_logoLabel) {
         m_logoLabel->setVisible(visible);
@@ -3168,7 +3234,9 @@ void PlayerView::resizeEvent(QResizeEvent *event)
         return;
     }
 
-    
+    // B3 spike：HUD 透明顶层窗口跟随本视图客户区尺寸
+    syncStandaloneHudWindow();
+
     
     
     
@@ -3219,6 +3287,24 @@ bool PlayerView::eventFilter(QObject *watched, QEvent *event)
 {
     if (m_isViewTearingDown)
     {
+        return BaseView::eventFilter(watched, event);
+    }
+
+    // B3 spike：HUD 透明顶层窗口自身的鼠标活动 → 保持 HUD 显示（显隐逻辑）。
+    if (watched == m_hudWindow && event->type() == QEvent::MouseMove)
+    {
+        auto *me = static_cast<QMouseEvent *>(event);
+        handlePointerActivity(me->globalPosition().toPoint());
+        return false;
+    }
+    // B3 spike：播放窗口移动/缩放/显示 → 同步 HUD 窗口位置（播放窗口本身
+    // move 时 PlayerView 的局部坐标不变、resizeEvent 不触发，必须在这里同步；
+    // Show 覆盖首次显示——那时 mapToGlobal 才有真实坐标）。
+    if (m_standalone && watched == window() &&
+        (event->type() == QEvent::Move || event->type() == QEvent::Resize ||
+         event->type() == QEvent::Show))
+    {
+        syncStandaloneHudWindow();
         return BaseView::eventFilter(watched, event);
     }
 
@@ -3472,8 +3558,10 @@ bool PlayerView::areControlsFullyVisible() const
 {
     if (m_standalone)
     {
-        // standalone 下 HUD 是原生窗口，不走 opacity 动画，以可见性为准
-        return m_topHUD && m_topHUD->isVisible();
+        // standalone 下 HUD 已 reparent 进透明顶层窗口（B3 spike），以 HUD
+        // 窗口的可见性为准（topHUD/bottomHUD 随它显隐）。
+        return m_hudWindow ? m_hudWindow->isVisible()
+                           : (m_topHUD && m_topHUD->isVisible());
     }
     return m_topOpacity && m_topOpacity->opacity() >= 1.0 &&
            (!m_fadeGroup || m_fadeGroup->state() != QAbstractAnimation::Running);
