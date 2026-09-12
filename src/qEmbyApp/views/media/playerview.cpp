@@ -1835,6 +1835,13 @@ void PlayerView::applyStandaloneOverlay()
     // 后无需任何坐标换算。
     // m_mediaSwitchDrawer 是 m_bottomHUD 的子控件，随其一起迁移。
     // PlayerOsdLayer 是 QObject（非 QWidget），取它的 container() 容器。
+    //
+    // ⚠️ 迁移后这些控件（及其子控件）**不再是本视图的子孙**：任何"相对本视图"
+    // 的坐标换算必须走全局坐标中转（mapToGlobal → mapFromGlobal），**不要**用
+    // mapTo(this, …)/mapFrom(this, …) —— 祖先关系不成立时 Qt 只打一条
+    // "parent must be in parent hierarchy" 警告并返回 (0,0)（曾导致底部 HUD 的
+    // 弹层被定位到窗口左上角，用户看到的是"点按钮没反应"）。本视图自身的
+    // mapFromGlobal/mapToGlobal 不受影响。
     // 注意：m_rightTrigger（右侧 15px 鼠标热区）刻意不迁移——它没有背景，
     // 迁进透明窗口后会挡住视频区右侧的鼠标；其触发由 handlePointerActivity
     // 按坐标命中（见该函数）。
@@ -2286,7 +2293,12 @@ void PlayerView::showCenteredPopup(QWidget *popup, QPushButton *btn)
             });
     popup->adjustSize();
 
-    QPoint btnPos = btn->mapTo(this, QPoint(btn->width() / 2, 0));
+    // 按钮已随 bottomHUD 迁进透明 HUD 窗口（B3），不再是本视图的子孙——直接
+    // mapTo(this, …) 会命中 Qt 的 "parent must be in parent hierarchy" 警告并
+    // 返回 (0,0)，弹层被夹取到窗口左上角，用户感知为"点按钮没反应"。
+    // 用全局坐标中转：mapToGlobal 只依赖按钮自身、mapFromGlobal 只依赖本视图，
+    // 不要求两者存在祖先关系。
+    const QPoint btnPos = mapFromGlobal(btn->mapToGlobal(QPoint(btn->width() / 2, 0)));
     int mx = btnPos.x() - popup->sizeHint().width() / 2;
     int my = btnPos.y() - popup->sizeHint().height() - 10;
 
