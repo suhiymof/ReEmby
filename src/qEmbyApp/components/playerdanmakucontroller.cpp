@@ -22,7 +22,7 @@
 
 namespace {
 
-constexpr auto kDanmakuTrackTitle = "[qEmby] Danmaku";
+constexpr auto kDanmakuTrackTitle = "[ReEmby] Danmaku";
 
 QString contextTitle(const DanmakuMediaContext &context)
 {

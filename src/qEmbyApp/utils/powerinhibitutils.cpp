@@ -37,7 +37,7 @@ quint32 g_dbusCookie = 0;
 QString applicationName()
 {
     const QString appName = QCoreApplication::applicationName().trimmed();
-    return appName.isEmpty() ? QStringLiteral("qEmby") : appName;
+    return appName.isEmpty() ? QStringLiteral("ReEmby") : appName;
 }
 
 QString inhibitionReason(QString reason)

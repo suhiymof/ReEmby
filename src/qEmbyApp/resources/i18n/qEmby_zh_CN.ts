@@ -25,16 +25,16 @@
         <translation>搜索</translation>
     </message>
     <message>
-        <source>A new qEmby version is available</source>
-        <translation>发现新的 qEmby 版本</translation>
+        <source>A new ReEmby version is available</source>
+        <translation>发现新的 ReEmby 版本</translation>
     </message>
     <message>
-        <source>qEmby %1 is available</source>
-        <translation>qEmby %1 已可用</translation>
+        <source>ReEmby %1 is available</source>
+        <translation>ReEmby %1 已可用</translation>
     </message>
     <message>
-        <source>qEmby Update</source>
-        <translation>qEmby 更新</translation>
+        <source>ReEmby Update</source>
+        <translation>ReEmby 更新</translation>
     </message>
     <message>
         <source>Update Now</source>
@@ -49,14 +49,14 @@
         <translation>… 打开发布页面查看更多内容。</translation>
     </message>
     <message>
-        <source>A new version of qEmby is available.
+        <source>A new version of ReEmby is available.
 
 Current version: %1
 New version: %2
 
 Release notes:
 %3</source>
-        <translation>发现新的 qEmby 版本。
+        <translation>发现新的 ReEmby 版本。
 
 当前版本：%1
 新版本：%2
@@ -2213,12 +2213,12 @@ Continue from there?</source>
         <translation>检查更新</translation>
     </message>
     <message>
-        <source>Automatically check GitHub for a new qEmby version on startup</source>
-        <translation>每次启动时自动从 GitHub 检查新的 qEmby 版本</translation>
+        <source>Automatically check GitHub for a new ReEmby version on startup</source>
+        <translation>每次启动时自动从 GitHub 检查新的 ReEmby 版本</translation>
     </message>
     <message>
-        <source>Allow only one qEmby instance and activate it when launched again (requires restart)</source>
-        <translation>仅允许一个 qEmby 实例运行，再次启动时激活现有窗口（需要重启生效）</translation>
+        <source>Allow only one ReEmby instance and activate it when launched again (requires restart)</source>
+        <translation>仅允许一个 ReEmby 实例运行，再次启动时激活现有窗口（需要重启生效）</translation>
     </message>
     <message>
         <source>Enable Logging</source>
@@ -2797,8 +2797,8 @@ This will remove the current log and rotated backups. This action cannot be undo
         <translation>致谢</translation>
     </message>
     <message>
-        <source>People who help qEmby reach more users.</source>
-        <translation>帮助 qEmby 触达更多用户的贡献者。</translation>
+        <source>People who help ReEmby reach more users.</source>
+        <translation>帮助 ReEmby 触达更多用户的贡献者。</translation>
     </message>
     <message>
         <source>French translation</source>
@@ -2821,8 +2821,8 @@ This will remove the current log and rotated backups. This action cannot be undo
         <translation>检查更新失败</translation>
     </message>
     <message>
-        <source>qEmby Update</source>
-        <translation>qEmby 更新</translation>
+        <source>ReEmby Update</source>
+        <translation>ReEmby 更新</translation>
     </message>
     <message>
         <source>Update Now</source>
@@ -2841,14 +2841,14 @@ This will remove the current log and rotated backups. This action cannot be undo
         <translation>… 打开发布页面查看更多内容。</translation>
     </message>
     <message>
-        <source>A new version of qEmby is available.
+        <source>A new version of ReEmby is available.
 
 Current version: %1
 New version: %2
 
 Release notes:
 %3</source>
-        <translation>发现新的 qEmby 版本。
+        <translation>发现新的 ReEmby 版本。
 
 当前版本：%1
 新版本：%2
@@ -2899,12 +2899,12 @@ Special thanks to the Emby and Jellyfin communities for their fantastic APIs.</s
 <context>
     <name>UpdateDialog</name>
     <message>
-        <source>qEmby Update</source>
-        <translation>qEmby 更新</translation>
+        <source>ReEmby Update</source>
+        <translation>ReEmby 更新</translation>
     </message>
     <message>
-        <source>A new version of qEmby is available.</source>
-        <translation>发现新的 qEmby 版本。</translation>
+        <source>A new version of ReEmby is available.</source>
+        <translation>发现新的 ReEmby 版本。</translation>
     </message>
     <message>
         <source>Current version</source>
@@ -2988,11 +2988,11 @@ Special thanks to the Emby and Jellyfin communities for their fantastic APIs.</s
     <name>UpdateProgressDialog</name>
     <message><source>%1 MB</source><translation>%1 MB</translation></message>
     <message><source>%1 KB</source><translation>%1 KB</translation></message>
-    <message><source>Update qEmby</source><translation>升级 qEmby</translation></message>
+    <message><source>Update ReEmby</source><translation>升级 ReEmby</translation></message>
     <message><source>Updating to %1</source><translation>正在升级到 %1</translation></message>
     <message><source>Preparing download…</source><translation>正在准备下载…</translation></message>
     <message><source>Waiting for download…</source><translation>等待开始下载…</translation></message>
-    <message><source>Start qEmby after updating</source><translation>升级后自动启动 qEmby</translation></message>
+    <message><source>Start ReEmby after updating</source><translation>升级后自动启动 ReEmby</translation></message>
     <message><source>Automatically reopen the application after installation completes</source><translation>安装完成后自动重新打开应用</translation></message>
     <message><source>Cancel</source><translation>取消</translation></message>
     <message><source>Install Update</source><translation>安装更新</translation></message>
@@ -3004,7 +3004,7 @@ Special thanks to the Emby and Jellyfin communities for their fantastic APIs.</s
     <message><source>Update failed</source><translation>升级失败</translation></message>
     <message><source>Close</source><translation>关闭</translation></message>
     <message><source>Starting the Windows installer…</source><translation>正在启动 Windows 安装程序…</translation></message>
-    <message><source>qEmby will close now. Installation progress will be shown by the Windows installer.</source><translation>qEmby 即将关闭，后续安装进度将由 Windows 安装程序显示。</translation></message>
+    <message><source>ReEmby will close now. Installation progress will be shown by the Windows installer.</source><translation>ReEmby 即将关闭，后续安装进度将由 Windows 安装程序显示。</translation></message>
 </context>
 
 <context>
@@ -8504,8 +8504,8 @@ Comments: %4</source>
         <translation>弹幕渲染方式</translation>
     </message>
     <message>
-        <source>Switch between the ASS subtitle track pipeline and qEmby's adaptive native danmaku renderer.</source>
-        <translation>在 ASS 字幕轨管线与 qEmby 自适应原生弹幕渲染器之间切换。</translation>
+        <source>Switch between the ASS subtitle track pipeline and ReEmby's adaptive native danmaku renderer.</source>
+        <translation>在 ASS 字幕轨管线与 ReEmby 自适应原生弹幕渲染器之间切换。</translation>
     </message>
     <message>
         <source>Enable Danmaku</source>
@@ -8940,8 +8940,8 @@ Comments: %4</source>
         <translation>弹幕渲染方式</translation>
     </message>
     <message>
-        <source>Choose whether danmaku is rendered through the ASS subtitle track or qEmby's adaptive native renderer</source>
-        <translation>选择通过 ASS 字幕轨还是 qEmby 自适应原生渲染器来显示弹幕</translation>
+        <source>Choose whether danmaku is rendered through the ASS subtitle track or ReEmby's adaptive native renderer</source>
+        <translation>选择通过 ASS 字幕轨还是 ReEmby 自适应原生渲染器来显示弹幕</translation>
     </message>
     <message>
         <source>ASS Subtitle Track</source>
@@ -9664,20 +9664,20 @@ Address: %2</source>
         <translation>加密快照失败。</translation>
     </message>
     <message>
-        <source>Selected file is not a valid qEmby snapshot.</source>
-        <translation>所选文件不是有效的 qEmby 快照。</translation>
+        <source>Selected file is not a valid ReEmby snapshot.</source>
+        <translation>所选文件不是有效的 ReEmby 快照。</translation>
     </message>
     <message>
         <source>Failed to decrypt the snapshot. The passphrase may be wrong or the file is corrupted.</source>
         <translation>解密快照失败，密码短语可能错误或文件已损坏。</translation>
     </message>
     <message>
-        <source>Snapshot is not a valid qEmby configuration bundle.</source>
-        <translation>该快照不是有效的 qEmby 配置包。</translation>
+        <source>Snapshot is not a valid ReEmby configuration bundle.</source>
+        <translation>该快照不是有效的 ReEmby 配置包。</translation>
     </message>
     <message>
-        <source>Refused to delete a file that is not a qEmby snapshot.</source>
-        <translation>已拒绝删除非 qEmby 快照的文件。</translation>
+        <source>Refused to delete a file that is not a ReEmby snapshot.</source>
+        <translation>已拒绝删除非 ReEmby 快照的文件。</translation>
     </message>
 </context>
 
@@ -9904,8 +9904,8 @@ File Name: %6</source>
         <translation>保存失败</translation>
     </message>
     <message>
-        <source>qEmby could not write to %1.</source>
-        <translation>qEmby 无法写入 %1。</translation>
+        <source>ReEmby could not write to %1.</source>
+        <translation>ReEmby 无法写入 %1。</translation>
     </message>
     <message>
         <source>Profile not configured</source>
@@ -10068,8 +10068,8 @@ This cannot be undone.</source>
 <context>
     <name>TrayManager</name>
     <message>
-        <source>Show qEmby</source>
-        <translation>显示 qEmby</translation>
+        <source>Show ReEmby</source>
+        <translation>显示 ReEmby</translation>
     </message>
     <message>
         <source>Quit</source>

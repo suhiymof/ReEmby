@@ -45,8 +45,9 @@ int main(int argc, char *argv[]) {
   a.setApplicationName(APP_NAME);
   a.setApplicationVersion(APP_VERSION);
   // 配置 / 缓存 / 日志目录 = %LOCALAPPDATA%/<OrganizationName>/<ApplicationName>
-  // （Windows 上即 AppData\Local\suh\qEmby）。改名后旧目录（AlanHJ\qEmby）不会
-  // 自动迁移，需要手动把 config.ini 等拷到新目录。
+  // （Windows 上即 AppData\Local\suh\ReEmby）。改名（qEmby -> ReEmby）后旧目录
+  // 不会自动迁移：把旧目录（AppData\Local\suh\qEmby）里的 config.ini 和
+  // secret-box-key.bin 拷到新目录即可，其余缓存可丢弃重建。
   a.setOrganizationName("suh");
   a.setOrganizationDomain("github.com/suhiymof/qEmby");
 
@@ -60,7 +61,7 @@ int main(int argc, char *argv[]) {
     return 0;
   }
 #if !defined(Q_OS_MACOS) && !defined(Q_OS_MAC)
-  QGuiApplication::setDesktopFileName(QStringLiteral("qemby"));
+  QGuiApplication::setDesktopFileName(QStringLiteral("reemby"));
   const QIcon appIcon(QStringLiteral(":/svg/qemby_logo.svg"));
   a.setWindowIcon(appIcon);
 #endif

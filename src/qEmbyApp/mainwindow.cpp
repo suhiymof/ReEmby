@@ -396,7 +396,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_updateButton = new UpdateIndicatorButton(centerContainer);
     m_updateButton->setObjectName(QStringLiteral("titlebar-update-button"));
     m_updateButton->setCursor(Qt::PointingHandCursor);
-    m_updateButton->setToolTip(tr("A new qEmby version is available"));
+    m_updateButton->setToolTip(tr("A new ReEmby version is available"));
     m_updateButton->hide();
     connect(m_updateButton, &UpdateIndicatorButton::clicked, this,
             &MainWindow::showUpdateConfirmation);
@@ -449,7 +449,7 @@ MainWindow::MainWindow(QWidget *parent)
                 m_availableUpdate = info;
                 m_hasAvailableUpdate = true;
                 m_updateButton->setToolTip(
-                    tr("qEmby %1 is available").arg(info.version));
+                    tr("ReEmby %1 is available").arg(info.version));
                 m_updateButton->show();
             });
     connect(updateManager, &UpdateManager::updateOpened, this,

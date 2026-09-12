@@ -250,9 +250,9 @@ QString PlaybackManager::generateIpcEndpoint(PlayerType type)
     case PlayerType::MPV:
     case PlayerType::IINA:
 #ifdef Q_OS_WIN
-        return QString("\\\\.\\pipe\\qemby-mpv-%1").arg(pid);
+        return QString("\\\\.\\pipe\\reemby-mpv-%1").arg(pid);
 #else
-        return QString("/tmp/qemby-mpv-%1.sock").arg(pid);
+        return QString("/tmp/reemby-mpv-%1.sock").arg(pid);
 #endif
     case PlayerType::VLC: {
         

@@ -402,7 +402,7 @@ void WebdavClient::applyAuthHeader(QNetworkRequest &request) const
     request.setRawHeader(QByteArrayLiteral("Authorization"),
                          QByteArrayLiteral("Basic ") + cred.toBase64());
     request.setRawHeader(QByteArrayLiteral("User-Agent"),
-                         QByteArrayLiteral("qEmby-Webdav/1.0"));
+                         QByteArrayLiteral("ReEmby-Webdav/1.0"));
     request.setRawHeader(QByteArrayLiteral("Accept"),
                          QByteArrayLiteral("application/xml, text/xml, */*"));
 }

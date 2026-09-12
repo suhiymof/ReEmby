@@ -16,7 +16,7 @@ WebdavProfile WebdavProfile::defaults()
     p.baseUrl.clear();
     p.username.clear();
     p.password.clear();
-    p.rootDir = QStringLiteral("/qEmby");
+    p.rootDir = QStringLiteral("/ReEmby");
     p.ignoreSsl = false;
     p.lastSyncAt = 0;
     return p;
@@ -73,7 +73,7 @@ void WebdavProfile::normalize()
     QString root = rootDir.trimmed();
     if (root.isEmpty())
     {
-        root = QStringLiteral("/qEmby");
+        root = QStringLiteral("/ReEmby");
     }
     if (!root.startsWith('/'))
     {

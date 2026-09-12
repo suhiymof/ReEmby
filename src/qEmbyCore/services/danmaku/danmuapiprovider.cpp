@@ -42,7 +42,7 @@ QMap<QString, QString> requestHeaders()
 {
     return {{QStringLiteral("Accept"), QStringLiteral("application/json")},
             {QStringLiteral("User-Agent"),
-             QStringLiteral("qEmby/1.0 (Danmaku)")}};
+             QStringLiteral("ReEmby/1.0 (Danmaku)")}};
 }
 
 QString stringField(const QJsonObject &object,

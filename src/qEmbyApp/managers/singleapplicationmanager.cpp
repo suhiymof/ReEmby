@@ -81,5 +81,5 @@ QString SingleApplicationManager::serverName() const {
       ConfigStore::instance()->filePath().toUtf8();
   const QByteArray suffix =
       QCryptographicHash::hash(identity, QCryptographicHash::Sha256).toHex().left(16);
-  return QStringLiteral("qemby-%1").arg(QString::fromLatin1(suffix));
+  return QStringLiteral("reemby-%1").arg(QString::fromLatin1(suffix));
 }

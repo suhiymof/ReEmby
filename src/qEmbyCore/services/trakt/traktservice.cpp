@@ -150,7 +150,7 @@ QMap<QString, QString> TraktService::baseHeaders() const
     headers.insert(QStringLiteral("trakt-api-version"), QStringLiteral("2"));
     headers.insert(QStringLiteral("trakt-api-key"), clientId());
     headers.insert(QStringLiteral("User-Agent"),
-                   QStringLiteral("qEmby/1.0 (Trakt)"));
+                   QStringLiteral("ReEmby/1.0 (Trakt)"));
     return headers;
 }
 

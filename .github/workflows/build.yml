@@ -1,5 +1,5 @@
 # =============================================================================
-# qEmby CI 构建 workflow（本地重建版）
+# ReEmby CI 构建 workflow（本地重建版）
 #
 # 前置条件（缺一不可，均为仓库外因素）：
 #   1. 本仓库需包含 cmake/QEmbyPlatformDeps.cmake 与 cmake/QEmbyPackaging.cmake
@@ -110,24 +110,24 @@ jobs:
       - name: Upload portable build
         uses: actions/upload-artifact@v5
         with:
-          name: qEmby-windows-x64
+          name: ReEmby-windows-x64
           path: build/bin/Release/
           if-no-files-found: error
 
       # ===================== Releases 打包与发布 =====================
       # 产物与上游对齐（仅 Win64）：
-      #   qEmby-<ver>-win-x64.zip         绿色便携版（解压即用）
-      #   qEmby-<ver>-win-x64-Setup.exe   安装版（Inno Setup，runner 预装）
+      #   ReEmby-<ver>-win-x64.zip         绿色便携版（解压即用）
+      #   ReEmby-<ver>-win-x64-Setup.exe   安装版（Inno Setup，runner 预装）
       # 发布策略：continuous 滚动 Release——每次 push 成功后覆盖更新同名
       # 资产，下载页始终是最新构建；版本号取自根 CMakeLists.txt project()。
       - name: Package portable zip
         shell: bash
         run: |
           set -euxo pipefail
-          VER="$(sed -n 's/^project(qEmby VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt | head -1)"
+          VER="$(sed -n 's/^project(ReEmby VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt | head -1)"
           test -n "$VER"
           mkdir -p dist
-          7z a -tzip "dist/qEmby-${VER}-win-x64.zip" ./build/bin/Release/*
+          7z a -tzip "dist/ReEmby-${VER}-win-x64.zip" ./build/bin/Release/*
           echo "QEMBY_VERSION=${VER}" >> "$GITHUB_ENV"
 
       - name: Build installer (Inno Setup)
@@ -145,12 +145,12 @@ jobs:
             /DSrcDir="$(cygpath -w "$(pwd)/build/bin/Release")" \
             /DOutDir="$(cygpath -w "$(pwd)/dist")" \
             /DAppVersion="${QEMBY_VERSION}" \
-            packaging/windows/qEmby.iss
+            packaging/windows/ReEmby.iss
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v5
         with:
-          name: qEmby-windows-x64-Setup
+          name: ReEmby-windows-x64-Setup
           path: dist/*-Setup.exe
           if-no-files-found: error
 
@@ -159,19 +159,19 @@ jobs:
       # v2.6.2 为最终 v2（Node 20 已弃用），升级到 v3（Node 24）。
       # 仅 v* tag / 网页手动 Publish Release 才发布到 Releases 页；
       # 主分支普通 push 只出 Artifacts，不产生 Release。
-      # tag 版本号需与根 CMakeLists.txt 的 project(qEmby VERSION x.y.z) 一致，
+      # tag 版本号需与根 CMakeLists.txt 的 project(ReEmby VERSION x.y.z) 一致，
       # 产物文件名中的版本号取自 CMakeLists。
       - name: Release (versioned)
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
-          name: "qEmby ${{ github.ref_name }}"
+          name: "ReEmby ${{ github.ref_name }}"
           prerelease: false
           generate_release_notes: true
           files: |
-            dist/qEmby-*-win-x64.zip
-            dist/qEmby-*-win-x64-Setup.exe
+            dist/ReEmby-*-win-x64.zip
+            dist/ReEmby-*-win-x64-Setup.exe
 
   # macOS 构建暂时禁用：macos-latest runner 曾卡 2h+ 不出结果（brew/dylibbundler
   # 慢 + arm64 runner 排队）。恢复方法：删除下行 `if: false`。
@@ -203,34 +203,34 @@ jobs:
         run: cmake --build build --parallel
 
       # app bundle 由根 CMakeLists.txt:16 CMAKE_RUNTIME_OUTPUT_DIRECTORY 落在
-      # build/bin/qEmbyApp.app（单配置生成器无 Release 子目录）
+      # build/bin/ReEmby.app（单配置生成器无 Release 子目录）
       - name: Bundle Qt frameworks (macdeployqt)
         run: |
-          "$QT_ROOT_DIR/bin/macdeployqt" build/bin/qEmbyApp.app
+          "$QT_ROOT_DIR/bin/macdeployqt" build/bin/ReEmby.app
 
       # macdeployqt 只收 Qt 库; libmpv 及其 brew 依赖链（ffmpeg 等）由
       # dylibbundler 递归收进 Contents/Frameworks 并修正 install_name
       - name: Bundle libmpv & brew deps (dylibbundler)
         run: |
           dylibbundler -b \
-            -x build/bin/qEmbyApp.app/Contents/MacOS/qEmbyApp \
-            -d build/bin/qEmbyApp.app/Contents/Frameworks \
+            -x build/bin/ReEmby.app/Contents/MacOS/ReEmby \
+            -d build/bin/ReEmby.app/Contents/Frameworks \
             -p @executable_path/../Frameworks \
             --overwrite-files
 
       # arm64 上未签名 bundle 无法运行，ad-hoc 签名即可
       - name: Ad-hoc codesign
         run: |
-          codesign --force --deep --sign - build/bin/qEmbyApp.app
+          codesign --force --deep --sign - build/bin/ReEmby.app
 
       - name: Zip app bundle
         run: |
           cd build/bin
-          ditto -c -k --sequesterRsrc --keepParent qEmbyApp.app qEmbyApp-macos-arm64.zip
+          ditto -c -k --sequesterRsrc --keepParent ReEmby.app ReEmby-macos-arm64.zip
 
       - name: Upload app bundle
         uses: actions/upload-artifact@v5
         with:
-          name: qEmby-macos-arm64
-          path: build/bin/qEmbyApp-macos-arm64.zip
+          name: ReEmby-macos-arm64
+          path: build/bin/ReEmby-macos-arm64.zip
           if-no-files-found: error

@@ -46,7 +46,7 @@ void TrayManager::setupMenu() {
     m_trayMenu->setAttribute(Qt::WA_TranslucentBackground);
 
     
-    m_showAction = new QAction(tr("Show qEmby"), this);
+    m_showAction = new QAction(tr("Show ReEmby"), this);
     connect(m_showAction, &QAction::triggered, this, &TrayManager::showMainRequested);
 
     m_quitAction = new QAction(tr("Quit"), this);

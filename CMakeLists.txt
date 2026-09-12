@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.19)
 
-project(qEmby VERSION 0.10.1 LANGUAGES CXX)
+project(ReEmby VERSION 0.10.1 LANGUAGES CXX)
 
 # Capture the build commit short hash at configure time so the resulting
 # binary self-identifies which commit it was built from. Lets users verify
@@ -26,7 +26,7 @@ execute_process(
 if(NOT QEMBY_BUILD_BRANCH)
     set(QEMBY_BUILD_BRANCH "unknown")
 endif()
-message(STATUS "qEmby build identifier: ${QEMBY_BUILD_BRANCH} @ ${QEMBY_BUILD_COMMIT}")
+message(STATUS "ReEmby build identifier: ${QEMBY_BUILD_BRANCH} @ ${QEMBY_BUILD_COMMIT}")
 
 # Release 也生成 PDB 调试符号：用户崩溃时 WER 自动产 dump
 # （C:/Users/<u>/AppData/Local/CrashDumps），有 PDB 才能把崩溃 offset

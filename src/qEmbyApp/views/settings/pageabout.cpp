@@ -47,7 +47,7 @@ PageAbout::PageAbout(QEmbyCore *core, QWidget *parent) : SettingsPageBase(core, 
     m_logoLabel->installEventFilter(this);
     m_mainLayout->addWidget(m_logoLabel, 0, Qt::AlignHCenter);
 
-    m_appNameLabel = new QLabel(tr("qEmby"), this);
+    m_appNameLabel = new QLabel(QStringLiteral("ReEmby"), this);
     m_appNameLabel->setAlignment(Qt::AlignCenter);
     m_appNameLabel->setObjectName("AboutAppNameLabel");
     m_appNameLabel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
@@ -198,7 +198,7 @@ QWidget *PageAbout::createAcknowledgementsPanel()
     thanksTitle->setObjectName("AboutThanksTitle");
     thanksLayout->addWidget(thanksTitle);
 
-    auto *thanksSubtitle = new QLabel(tr("People who help qEmby reach more users."), thanksPanel);
+    auto *thanksSubtitle = new QLabel(tr("People who help ReEmby reach more users."), thanksPanel);
     thanksSubtitle->setAlignment(Qt::AlignCenter);
     thanksSubtitle->setObjectName("AboutThanksSubtitle");
     thanksLayout->addWidget(thanksSubtitle);

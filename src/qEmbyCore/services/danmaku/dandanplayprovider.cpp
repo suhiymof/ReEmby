@@ -271,7 +271,7 @@ QMap<QString, QString> buildHeaders(const DanmakuProviderConfig &config,
     QMap<QString, QString> headers;
     headers.insert(QStringLiteral("Accept"), QStringLiteral("application/json"));
     headers.insert(QStringLiteral("User-Agent"),
-                   QStringLiteral("qEmby/1.0 (Danmaku)"));
+                   QStringLiteral("ReEmby/1.0 (Danmaku)"));
 
     const QString appId = config.appId.trimmed();
     const QString appSecret = config.appSecret.trimmed();

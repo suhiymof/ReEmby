@@ -28,7 +28,10 @@ namespace
 
 constexpr char kLegacySnapshotPrefix[] = "qemby-config-";
 constexpr char kLegacySnapshotSuffix[] = ".bin";
-constexpr char kSnapshotPrefix[] = "qEmby-";
+// 上一代（qEmby 时代）的快照前缀：应用改名后仍要能列出/恢复旧快照，
+// 因此识别逻辑同时接受新旧两种前缀（写入只使用新前缀）。
+constexpr char kPreviousSnapshotPrefix[] = "qEmby-";
+constexpr char kSnapshotPrefix[] = "ReEmby-";
 constexpr char kSnapshotSuffix[] = "-config.bin";
 constexpr char kDefaultSnapshotTag[] = "snapshot";
 
@@ -215,9 +218,11 @@ bool WebdavSyncService::isQEmbySnapshotName(const QString &fileName)
 {
     const bool isNewName = fileName.startsWith(QString::fromLatin1(kSnapshotPrefix)) &&
                            fileName.endsWith(QString::fromLatin1(kSnapshotSuffix));
+    const bool isPreviousName = fileName.startsWith(QString::fromLatin1(kPreviousSnapshotPrefix)) &&
+                                fileName.endsWith(QString::fromLatin1(kSnapshotSuffix));
     const bool isLegacyName = fileName.startsWith(QString::fromLatin1(kLegacySnapshotPrefix)) &&
                               fileName.endsWith(QString::fromLatin1(kLegacySnapshotSuffix));
-    return isNewName || isLegacyName;
+    return isNewName || isPreviousName || isLegacyName;
 }
 
 void WebdavSyncService::parseSnapshotName(const QString &fileName, QString &appVersionOut, QString &osNameOut,
@@ -234,10 +239,17 @@ void WebdavSyncService::parseSnapshotName(const QString &fileName, QString &appV
         return;
     }
 
-    if (fileName.startsWith(QString::fromLatin1(kSnapshotPrefix)) &&
-        fileName.endsWith(QString::fromLatin1(kSnapshotSuffix)))
+    const bool matchesCurrentPrefix =
+        fileName.startsWith(QString::fromLatin1(kSnapshotPrefix)) &&
+        fileName.endsWith(QString::fromLatin1(kSnapshotSuffix));
+    const bool matchesPreviousPrefix =
+        fileName.startsWith(QString::fromLatin1(kPreviousSnapshotPrefix)) &&
+        fileName.endsWith(QString::fromLatin1(kSnapshotSuffix));
+    if (matchesCurrentPrefix || matchesPreviousPrefix)
     {
-        const int prefixLen = static_cast<int>(sizeof(kSnapshotPrefix)) - 1;
+        const int prefixLen = matchesCurrentPrefix
+                                  ? static_cast<int>(sizeof(kSnapshotPrefix)) - 1
+                                  : static_cast<int>(sizeof(kPreviousSnapshotPrefix)) - 1;
         const int suffixLen = static_cast<int>(sizeof(kSnapshotSuffix)) - 1;
         const QString core = fileName.mid(prefixLen, fileName.size() - prefixLen - suffixLen);
 
@@ -438,7 +450,7 @@ QCoro::Task<ConfigBundle> WebdavSyncService::downloadSnapshot(QString fileName, 
     qDebug() << "[WebdavSyncService] downloadSnapshot START | fileName:" << fileName;
     if (!isQEmbySnapshotName(fileName))
     {
-        throw std::runtime_error(tr("Selected file is not a valid qEmby snapshot.").toUtf8().toStdString());
+        throw std::runtime_error(tr("Selected file is not a valid ReEmby snapshot.").toUtf8().toStdString());
     }
 
     std::unique_ptr<WebdavClient> client(buildClient());
@@ -450,7 +462,7 @@ QCoro::Task<ConfigBundle> WebdavSyncService::downloadSnapshot(QString fileName, 
         if (!plainBundleOpt.has_value())
         {
             SecureSecretBox::secureZero(payload);
-            throw std::runtime_error(tr("Snapshot is not a valid qEmby configuration bundle.").toUtf8().toStdString());
+            throw std::runtime_error(tr("Snapshot is not a valid ReEmby configuration bundle.").toUtf8().toStdString());
         }
 
         SecureSecretBox::secureZero(payload);
@@ -485,7 +497,7 @@ QCoro::Task<ConfigBundle> WebdavSyncService::downloadSnapshot(QString fileName, 
     SecureSecretBox::secureZero(plain);
     if (!bundleOpt.has_value())
     {
-        throw std::runtime_error(tr("Snapshot is not a valid qEmby configuration bundle.").toUtf8().toStdString());
+        throw std::runtime_error(tr("Snapshot is not a valid ReEmby configuration bundle.").toUtf8().toStdString());
     }
 
     qDebug() << "[WebdavSyncService] downloadSnapshot DONE"
@@ -500,7 +512,7 @@ QCoro::Task<bool> WebdavSyncService::deleteSnapshot(QString fileName)
     qDebug() << "[WebdavSyncService] deleteSnapshot START | fileName:" << fileName;
     if (!isQEmbySnapshotName(fileName))
     {
-        throw std::runtime_error(tr("Refused to delete a file that is not a qEmby snapshot.").toUtf8().toStdString());
+        throw std::runtime_error(tr("Refused to delete a file that is not a ReEmby snapshot.").toUtf8().toStdString());
     }
 
     std::unique_ptr<WebdavClient> client(buildClient());

@@ -906,7 +906,7 @@ void PlayerView::updatePowerInhibition()
 
     if (shouldHold)
     {
-        m_powerInhibitionHeld = PowerInhibitUtils::acquirePlaybackInhibition(QStringLiteral("qEmby video playback"));
+        m_powerInhibitionHeld = PowerInhibitUtils::acquirePlaybackInhibition(QStringLiteral("ReEmby video playback"));
     }
     else
     {
@@ -4199,7 +4199,7 @@ void PlayerView::showSettingsMenu()
     
     ServerProfile profile = m_core->serverManager()->activeProfile();
     bool defaultStrmDirect = (profile.type == ServerProfile::Jellyfin);
-    QSettings settings("qEmby", "Player");
+    QSettings settings("ReEmby", "Player");
     bool strmDirect = settings.value("EnableStrmDirectPlay", defaultStrmDirect).toBool();
 
     panel->addItem(tr("STRM Direct Play"), "strm_direct", strmDirect);
@@ -4249,7 +4249,7 @@ void PlayerView::showSettingsMenu()
                 {
                     ServerProfile profile = m_core->serverManager()->activeProfile();
                     bool defaultStrmDirect = (profile.type == ServerProfile::Jellyfin);
-                    QSettings settings("qEmby", "Player");
+                    QSettings settings("ReEmby", "Player");
                     bool currentStrm = settings.value("EnableStrmDirectPlay", defaultStrmDirect).toBool();
                     bool newStrm = !currentStrm;
 

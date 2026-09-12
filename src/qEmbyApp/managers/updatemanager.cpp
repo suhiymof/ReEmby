@@ -113,7 +113,7 @@ void UpdateManager::checkForUpdates(CheckMode mode)
 
     QNetworkRequest request(kLatestReleaseApi);
     request.setHeader(QNetworkRequest::UserAgentHeader,
-                      QStringLiteral("qEmby/%1")
+                      QStringLiteral("ReEmby/%1")
                           .arg(QCoreApplication::applicationVersion()));
     request.setRawHeader("Accept", "application/vnd.github+json");
     request.setRawHeader("X-GitHub-Api-Version", "2026-03-10");

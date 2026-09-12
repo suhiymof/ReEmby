@@ -2287,8 +2287,8 @@ Cette opération supprimera le fichier journal actuel ainsi que les sauvegardes 
         <translation>Remerciements</translation>
     </message>
     <message>
-        <source>People who help qEmby reach more users.</source>
-        <translation>Les personnes qui aident qEmby à toucher plus d'utilisateurs.</translation>
+        <source>People who help ReEmby reach more users.</source>
+        <translation>Les personnes qui aident ReEmby à toucher plus d'utilisateurs.</translation>
     </message>
     <message>
         <source>French translation</source>
@@ -7585,8 +7585,8 @@ Commentaires: %4</translation>
         <translation>Rendu de danmaku</translation>
     </message>
     <message>
-        <source>Switch between the ASS subtitle track pipeline and qEmby's adaptive native danmaku renderer.</source>
-        <translation>Basculer entre le pipeline de pistes de sous-titres ASS et le moteur de rendu adaptatif natif de qEmby pour les danmaku.</translation>
+        <source>Switch between the ASS subtitle track pipeline and ReEmby's adaptive native danmaku renderer.</source>
+        <translation>Basculer entre le pipeline de pistes de sous-titres ASS et le moteur de rendu adaptatif natif de ReEmby pour les danmaku.</translation>
     </message>
     <message>
         <source>Enable Danmaku</source>
@@ -7937,8 +7937,8 @@ Commentaires: %4</translation>
         <translation>Rendu de danmaku</translation>
     </message>
     <message>
-        <source>Choose whether danmaku is rendered through the ASS subtitle track or qEmby's adaptive native renderer</source>
-        <translation>Choisissez si le danmaku doit être affiché via la piste de sous-titres ASS ou via le moteur de rendu natif adaptatif de qEmby</translation>
+        <source>Choose whether danmaku is rendered through the ASS subtitle track or ReEmby's adaptive native renderer</source>
+        <translation>Choisissez si le danmaku doit être affiché via la piste de sous-titres ASS ou via le moteur de rendu natif adaptatif de ReEmby</translation>
     </message>
     <message>
         <source>ASS Subtitle Track</source>
@@ -8413,8 +8413,8 @@ Adresse: %2</translation>
 <context>
     <name>TrayManager</name>
     <message>
-        <source>Show qEmby</source>
-        <translation>Afficher qEmby</translation>
+        <source>Show ReEmby</source>
+        <translation>Afficher ReEmby</translation>
     </message>
     <message>
         <source>Quit</source>

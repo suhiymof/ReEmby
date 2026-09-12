@@ -326,7 +326,7 @@ namespace
         const QString device = QSysInfo::machineHostName();
         QString auth = QString("Emby Client=\"%1\", Device=\"%2\", "
                                "DeviceId=\"%3\", Version=\"%4\"")
-                           .arg(clientName.isEmpty() ? QStringLiteral("qEmby") : clientName,
+                           .arg(clientName.isEmpty() ? QStringLiteral("ReEmby") : clientName,
                                 device,
                                 profile.deviceId,
                                 version.isEmpty() ? QStringLiteral("1.0") : version);
@@ -498,7 +498,7 @@ MediaService::MediaService(ServerManager *serverManager, QObject *parent)
 {
     m_imageManager = new QNetworkAccessManager(this);
     auto *diskCache = new QNetworkDiskCache(this);
-    QString cachePath = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/qEmby_ImageCache";
+    QString cachePath = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/reEmby_ImageCache";
     QDir().mkpath(cachePath);
     diskCache->setCacheDirectory(cachePath);
     diskCache->setMaximumCacheSize(500 * 1024 * 1024);
@@ -1037,7 +1037,7 @@ QCoro::Task<QPixmap> MediaService::fetchImage(QString itemId,
 
     if (cacheVersion > 0)
     {
-        urlStr += QStringLiteral("&qemby_image_rev=%1").arg(cacheVersion);
+        urlStr += QStringLiteral("&reemby_image_rev=%1").arg(cacheVersion);
         qDebug() << "[MediaService] fetchImage using invalidated cache version"
                  << "| itemId=" << trimmedItemId
                  << "| imageType=" << trimmedImageType
@@ -1049,7 +1049,7 @@ QCoro::Task<QPixmap> MediaService::fetchImage(QString itemId,
         
         
         
-        urlStr += QStringLiteral("&qemby_network_only=%1_%2")
+        urlStr += QStringLiteral("&reemby_network_only=%1_%2")
                       .arg(QDateTime::currentMSecsSinceEpoch())
                       .arg(inFlightRequestId);
         qDebug() << "[MediaService] network-only image request"
@@ -2803,7 +2803,7 @@ QString MediaService::getStreamUrl(const QString &itemId, const MediaSourceInfo 
     }
 
     bool defaultStrmDirect = (profile.type == ServerProfile::Jellyfin);
-    QSettings settings("qEmby", "Player");
+    QSettings settings("ReEmby", "Player");
     bool enableStrmDirect = settings.value("EnableStrmDirectPlay", defaultStrmDirect).toBool();
 
     if (enableStrmDirect)
@@ -3183,7 +3183,7 @@ void MediaService::updateUserViewsCache(MediaItem view, QString serverId,
 QString RecommendCache::cacheFilePath(const QString &serverId)
 {
     return QStandardPaths::writableLocation(QStandardPaths::CacheLocation) +
-           QStringLiteral("/qEmby_RecommendCache_%1.json").arg(serverId);
+           QStringLiteral("/reEmby_RecommendCache_%1.json").arg(serverId);
 }
 
 void RecommendCache::clear()

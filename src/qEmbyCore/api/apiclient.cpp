@@ -25,7 +25,7 @@ QMap<QString, QString> ApiClient::getAuthHeaders() const {
 
         QString auth = QString("Emby Client=\"%1\", Device=\"%2\", "
                                "DeviceId=\"%3\", Version=\"%4\"")
-                           .arg(clientName.isEmpty() ? QStringLiteral("qEmby") : clientName,
+                           .arg(clientName.isEmpty() ? QStringLiteral("ReEmby") : clientName,
                                 device,
                                 m_profile.deviceId,
                                 version.isEmpty() ? QStringLiteral("1.0") : version);
@@ -37,7 +37,7 @@ QMap<QString, QString> ApiClient::getAuthHeaders() const {
         return headers;
     }
 
-    QString auth = QString("MediaBrowser Client=\"qEmby\", Device=\"Desktop\", "
+    QString auth = QString("MediaBrowser Client=\"ReEmby\", Device=\"Desktop\", "
                            "DeviceId=\"%1\", Version=\"0.1\"")
                        .arg(m_profile.deviceId);
 

@@ -38,14 +38,14 @@ UpdateDialog::UpdateDialog(const UpdateInfo &info,
                            QWidget *parent)
     : ModernDialogBase(parent)
 {
-    setTitle(tr("qEmby Update"));
+    setTitle(tr("ReEmby Update"));
     setMinimumSize(540, 430);
     resize(640, 600);
 
     auto *layout = contentLayout();
     layout->setSpacing(0);
 
-    auto *headline = new QLabel(tr("A new version of qEmby is available."), this);
+    auto *headline = new QLabel(tr("A new version of ReEmby is available."), this);
     headline->setObjectName(QStringLiteral("UpdateDialogHeadline"));
     headline->setWordWrap(true);
     layout->addWidget(headline);

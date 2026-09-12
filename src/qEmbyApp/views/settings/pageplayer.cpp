@@ -552,7 +552,7 @@ PagePlayer::PagePlayer(QEmbyCore *core, QWidget *parent)
               QFile file(mpvConfPath);
               if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
                 QTextStream out(&file);
-                out << "# MPV Configuration File for qEmby\n";
+                out << "# MPV Configuration File for ReEmby\n";
                 out << "# Uncomment or add options below, one per line.\n";
                 out << "# Reference: https://mpv.io/manual/stable/#options\n";
                 out << "#\n";
@@ -744,7 +744,7 @@ PagePlayer::PagePlayer(QEmbyCore *core, QWidget *parent)
       DanmakuRendererUtils::nativeSmoothRendererId());
   addDanmakuSubPanel(
       ":/svg/dark/danmaku.svg", tr("Danmaku Renderer"),
-      tr("Choose whether danmaku is rendered through the ASS subtitle track or qEmby's adaptive native renderer"),
+      tr("Choose whether danmaku is rendered through the ASS subtitle track or ReEmby's adaptive native renderer"),
       danmakuRendererCombo, ConfigKeys::PlayerDanmakuRenderer,
       QVariant(DanmakuRendererUtils::defaultRendererId()));
 
@@ -978,7 +978,7 @@ PagePlayer::PagePlayer(QEmbyCore *core, QWidget *parent)
               QFile readmeFile(readmePath);
               if (readmeFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
                 QTextStream out(&readmeFile);
-                out << "qEmby local danmaku folder\n";
+                out << "ReEmby local danmaku folder\n";
                 out << "\n";
                 out << "Supported file types:\n";
                 out << "- .ass : attached directly to the embedded player\n";

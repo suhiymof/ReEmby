@@ -92,7 +92,7 @@ QString preferredLocalDanmakuRootPath()
         return legacyLocalDanmakuRootPath();
     }
 
-    return QDir(appDir).filePath(QStringLiteral("qEmby-data/danmaku/local"));
+    return QDir(appDir).filePath(QStringLiteral("ReEmby-data/danmaku/local"));
 }
 
 QString legacyLocalDanmakuDirectoryPath(QString serverId)

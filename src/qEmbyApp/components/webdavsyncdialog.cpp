@@ -235,7 +235,7 @@ void WebdavSyncDialog::buildUi()
         form->addWidget(m_passwordEdit, 1, 3);
 
         m_rootDirEdit = new QLineEdit(card);
-        m_rootDirEdit->setPlaceholderText(QStringLiteral("/qEmby"));
+        m_rootDirEdit->setPlaceholderText(QStringLiteral("/ReEmby"));
         tuneEdit(m_rootDirEdit);
 
         
@@ -561,7 +561,7 @@ WebdavProfile WebdavSyncDialog::collectProfileFromUi() const
     p.rootDir = m_rootDirEdit->text().trimmed();
     if (p.rootDir.isEmpty())
     {
-        p.rootDir = QStringLiteral("/qEmby");
+        p.rootDir = QStringLiteral("/ReEmby");
     }
     p.ignoreSsl = m_ignoreSslSwitch->isChecked();
     p.normalize();
@@ -695,7 +695,7 @@ void WebdavSyncDialog::onSaveProfileClicked()
     else
     {
         showError(tr("Save failed"),
-                  tr("qEmby could not write to %1.").arg(WebdavProfileStore::filePath()));
+                  tr("ReEmby could not write to %1.").arg(WebdavProfileStore::filePath()));
     }
 }
 

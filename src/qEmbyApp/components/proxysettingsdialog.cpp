@@ -637,7 +637,7 @@ void ProxySettingsDialog::onTestClicked() {
     QNetworkRequest req(probeUrl);
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                      QNetworkRequest::NoLessSafeRedirectPolicy);
-    req.setRawHeader("User-Agent", "qEmby-ProxyTest/1.0");
+    req.setRawHeader("User-Agent", "ReEmby-ProxyTest/1.0");
     auto* timer = new QElapsedTimer();
     timer->start();
     QNetworkReply* reply = nam->head(req);

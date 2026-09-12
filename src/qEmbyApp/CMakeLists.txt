@@ -121,11 +121,13 @@ endif()
 
 # 4. 设置平台属性 (Windows 和 macOS)
 if(${QT_VERSION} VERSION_LESS 6.1.0)
-    set(BUNDLE_ID_OPTION MACOSX_BUNDLE_GUI_IDENTIFIER com.hl.qEmby)
+    set(BUNDLE_ID_OPTION MACOSX_BUNDLE_GUI_IDENTIFIER com.hl.reemby)
 endif()
 
-# 注意：目标从 qEmby 改为 qEmbyApp
+# 注意：目标名保留 qEmbyApp（内部标识），产物名（exe / macOS .app）通过
+# OUTPUT_NAME 统一为 ReEmby。
 set_target_properties(qEmbyApp PROPERTIES
+    OUTPUT_NAME "ReEmby"
     ${BUNDLE_ID_OPTION}
     MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
     MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}

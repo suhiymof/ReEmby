@@ -49,7 +49,7 @@ void WindowsUpdateManager::startDownload(const UpdateInfo &info)
 
     const QString updateDirectory =
         QStandardPaths::writableLocation(QStandardPaths::TempLocation) +
-        QStringLiteral("/qEmby-updates/") + info.version;
+        QStringLiteral("/reEmby-updates/") + info.version;
     if (!QDir().mkpath(updateDirectory)) {
         fail(tr("Could not create the temporary update directory."));
         return;
@@ -77,7 +77,7 @@ void WindowsUpdateManager::startDownload(const UpdateInfo &info)
 
     QNetworkRequest request(info.downloadUrl);
     request.setHeader(QNetworkRequest::UserAgentHeader,
-                      QStringLiteral("qEmby/%1")
+                      QStringLiteral("ReEmby/%1")
                           .arg(QCoreApplication::applicationVersion()));
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                          QNetworkRequest::NoLessSafeRedirectPolicy);

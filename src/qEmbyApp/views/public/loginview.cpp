@@ -384,7 +384,7 @@ void LoginView::applyServerUrlToForm(const QUrl &url,
 
 void LoginView::setupUi() {
   this->setProperty("showGlobalSearch", false);
-  this->setProperty("viewTitle", tr("qEmby"));
+  this->setProperty("viewTitle", QStringLiteral("ReEmby"));
   this->setProperty("showGlobalBack", false);
   this->setProperty("showGlobalHome", false);
   this->setProperty("showGlobalFav", false);

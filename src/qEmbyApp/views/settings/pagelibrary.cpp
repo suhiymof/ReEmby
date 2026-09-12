@@ -320,7 +320,7 @@ void PageLibrary::updateCacheSizes() {
   QString sid = m_core->serverManager()->activeProfile().id;
   QString dataCachePath =
       QStandardPaths::writableLocation(QStandardPaths::CacheLocation) +
-      QStringLiteral("/qEmby_RecommendCache_%1.json").arg(sid);
+      QStringLiteral("/reEmby_RecommendCache_%1.json").arg(sid);
   QFileInfo dataInfo(dataCachePath);
   qint64 dataSize = dataInfo.exists() ? dataInfo.size() : 0;
   m_dataCacheSizeLabel->setText(FileUtils::formatSize(dataSize));
@@ -328,7 +328,7 @@ void PageLibrary::updateCacheSizes() {
   
   QString imgCachePath =
       QStandardPaths::writableLocation(QStandardPaths::CacheLocation) +
-      "/qEmby_ImageCache";
+      "/reEmby_ImageCache";
   qint64 imgSize = FileUtils::calcDirSize(imgCachePath);
   m_imgCacheSizeLabel->setText(FileUtils::formatSize(imgSize));
 }

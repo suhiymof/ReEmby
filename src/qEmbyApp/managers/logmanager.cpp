@@ -8,7 +8,7 @@
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/sinks/null_sink.h>
 
-static const char *kLoggerName = "qemby";
+static const char *kLoggerName = "reemby";
 static const int kMaxFileSize = 5 * 1024 * 1024; 
 static const int kMaxFiles = 3;
 
@@ -54,7 +54,7 @@ LogManager *LogManager::instance() {
 QString LogManager::logFilePath() const {
   QString configDir =
       QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
-  return configDir + "/qemby.log";
+  return configDir + "/reemby.log";
 }
 
 void LogManager::init() {
@@ -109,7 +109,7 @@ void LogManager::setupSpdlog() {
     
     qInstallMessageHandler(spdlogMessageHandler);
 
-    logger->info("=== qEmby Logging Started ===");
+    logger->info("=== ReEmby Logging Started ===");
   } catch (const spdlog::spdlog_ex &ex) {
     
     Q_UNUSED(ex);
@@ -119,7 +119,7 @@ void LogManager::setupSpdlog() {
 void LogManager::teardownSpdlog() {
   auto logger = spdlog::get(kLoggerName);
   if (logger) {
-    logger->info("=== qEmby Logging Stopped ===");
+    logger->info("=== ReEmby Logging Stopped ===");
     logger->flush();
   }
 

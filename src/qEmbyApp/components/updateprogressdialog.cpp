@@ -32,7 +32,7 @@ UpdateProgressDialog::UpdateProgressDialog(const UpdateInfo &info,
                                            QWidget *parent)
     : ModernDialogBase(parent), m_info(info)
 {
-    setTitle(tr("Update qEmby"));
+    setTitle(tr("Update ReEmby"));
     setMinimumWidth(500);
     resize(560, 320);
 
@@ -72,7 +72,7 @@ UpdateProgressDialog::UpdateProgressDialog(const UpdateInfo &info,
     restartTextLayout->setContentsMargins(0, 0, 0, 0);
     restartTextLayout->setSpacing(3);
     auto *restartTitle =
-        new QLabel(tr("Start qEmby after updating"), restartCard);
+        new QLabel(tr("Start ReEmby after updating"), restartCard);
     restartTitle->setObjectName(QStringLiteral("UpdateRestartTitle"));
     auto *restartDescription = new QLabel(
         tr("Automatically reopen the application after installation completes"),
@@ -86,7 +86,7 @@ UpdateProgressDialog::UpdateProgressDialog(const UpdateInfo &info,
 
     m_restartSwitch = new ModernSwitch(restartCard);
     m_restartSwitch->setChecked(true);
-    m_restartSwitch->setToolTip(tr("Start qEmby after updating"));
+    m_restartSwitch->setToolTip(tr("Start ReEmby after updating"));
     restartLayout->addWidget(m_restartSwitch);
     layout->addWidget(restartCard);
 
@@ -192,7 +192,7 @@ void UpdateProgressDialog::installUpdate()
     m_installLaunched = true;
     m_statusLabel->setText(tr("Starting the Windows installer…"));
     m_detailLabel->setText(
-        tr("qEmby will close now. Installation progress will be shown by the "
+        tr("ReEmby will close now. Installation progress will be shown by the "
            "Windows installer."));
     m_cancelButton->setEnabled(false);
     m_installButton->setEnabled(false);
