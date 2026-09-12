@@ -44,6 +44,13 @@ public:
     
     void stopExternalPlayer();
 
+    // DV 自动切换（列表/继续观看路径）：内嵌播放中异步复查确认纯 DV 后，
+    // 由 PlayerView 调用——带当前进度切到独立窗口播放（内嵌的 render API
+    // 不处理 DV 的 IPT 色彩，独立窗口 wid + gpu-next 正常）。
+    void relaunchInIndependentWindow(const QString& mediaId, const QString& title,
+                                     const QString& streamUrl, long long startPositionTicks,
+                                     const QVariant& extraData);
+
 signals:
     
     void requestEmbeddedPlay(const QString& mediaId, const QString& title,

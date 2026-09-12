@@ -138,6 +138,18 @@ void PlaybackManager::startInternalPlayback(const QString& mediaId, const QStrin
     Q_EMIT requestEmbeddedPlay(mediaId, title, streamUrl, startPositionTicks, extraData);
 }
 
+void PlaybackManager::relaunchInIndependentWindow(const QString& mediaId, const QString& title,
+                                                  const QString& streamUrl, long long startPositionTicks,
+                                                  const QVariant& extraData)
+{
+    qDebug() << "[PlaybackManager] ===== relaunchInIndependentWindow (DV auto) =====";
+    qDebug() << "[PlaybackManager] mediaId:" << mediaId << "title:" << title;
+    qDebug() << "[PlaybackManager] streamUrl:" << LogRedactionUtils::url(streamUrl);
+    qDebug() << "[PlaybackManager] startPositionTicks:" << startPositionTicks
+             << "(" << ticksToTimeString(startPositionTicks) << ")";
+    launchIndependentWindow(mediaId, title, streamUrl, startPositionTicks, extraData);
+}
+
 void PlaybackManager::stopExternalPlayer()
 {
     if (m_extProcess && m_extProcess->state() != QProcess::NotRunning) {

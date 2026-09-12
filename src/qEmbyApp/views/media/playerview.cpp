@@ -16,6 +16,7 @@
 #include "../../utils/playerpreferenceutils.h"
 #include "../../utils/powerinhibitutils.h"
 #include "../../utils/subtitlestyleutils.h"
+#include "../../managers/playbackmanager.h"
 #include "qembycore.h"
 #include <QAbstractAnimation>
 #include <QApplication>
@@ -6051,6 +6052,30 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
                 const bool rechecked = sourceNeedsForcedSoftwareDecode(source);
                 if (!rechecked)
                     co_return;
+                // DV 自动独立窗口（列表/继续观看路径）：内嵌配置下确认纯 DV →
+                // 带当前进度切到独立窗口播放（内嵌的 render API 不处理 DV 的
+                // IPT 色彩，独立窗口 wid + gpu-next 正常）。先启动独立窗口，
+                // 再复用返回流程退出内嵌——内嵌的 stop 上报与独立窗口的 start
+                // 使用同一位置，Emby 端视角连续。
+                if (!safeThis->m_standalone &&
+                    ConfigStore::instance()->get<bool>(
+                        ConfigKeys::PlayerDvAutoIndependentWindow, true))
+                {
+                    const long long switchTicks = static_cast<long long>(
+                        qMax(0.0, safeThis->m_currentPosition) * 10000000.0);
+                    PlayerLaunchContext switchContext;
+                    switchContext.mediaItem = safeThis->m_currentMediaItem;
+                    switchContext.selectedSource = source;
+                    qInfo().noquote()
+                        << "[PlayerView] DV recheck → switching to independent window"
+                        << "| mediaId:" << mediaId
+                        << "| position:" << safeThis->m_currentPosition;
+                    PlaybackManager::instance()->relaunchInIndependentWindow(
+                        mediaId, safeThis->m_fullTitle, streamUrl, switchTicks,
+                        QVariant::fromValue(switchContext));
+                    safeThis->onBackClicked();
+                    co_return;
+                }
                 qInfo().noquote() << "[PlayerView] DV recheck confirmed pure DV, reloading"
                                   << "| mediaId:" << mediaId
                                   << "| position:" << safeThis->m_currentPosition;
