@@ -1391,6 +1391,14 @@ QWidget#playerSubtitleSettingsDialog {
     border: 1px solid rgba(71, 85, 105, 0.88);
 }
 
+/* 字幕设置对话框滚动区：透明以露出对话框背景（滚动条沿用全局 QScrollBar 样式）。 */
+QScrollArea#playerSubtitleSettingsScroll,
+QScrollArea#playerSubtitleSettingsScroll > QWidget,
+QWidget#playerSubtitleSettingsScrollContent {
+    background: transparent;
+    border: none;
+}
+
 #playerSubtitleSettingsDialog QFrame#playerSubtitleSummaryCard {
     background: rgba(30, 41, 59, 0.82);
     border: 1px solid rgba(96, 165, 250, 0.14);

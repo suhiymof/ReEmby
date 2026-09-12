@@ -14,6 +14,7 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QScrollArea>
 #include <QSignalBlocker>
 #include <QVBoxLayout>
 
@@ -117,12 +118,28 @@ PlayerSubtitleSettingsDialog::PlayerSubtitleSettingsDialog(QWidget *parent)
         ConfigKeys::PlayerSubtitleSecondaryEnabled, false);
 
     setSurfaceObjectName("playerSubtitleSettingsDialog");
-    setSurfacePreferredSize(secondaryEnabled ? QSize(620, 820)
-                                             : QSize(620, 456));
     setTitle(tr("Subtitle Settings"));
 
-    contentLayout()->setContentsMargins(16, 8, 16, 16);
-    contentLayout()->setSpacing(10);
+    contentLayout()->setContentsMargins(0, 0, 0, 0);
+    contentLayout()->setSpacing(0);
+
+    // 内容放入滚动区：播放窗口较矮时对话框可用高度不足，参数卡片会被压缩
+    // 裁切（surface 尺寸被可用空间 clamp）——滚动区让内容保持完整高度，
+    // 超出部分滚动查看。surface 高度按内容自适应（见构造末尾）。
+    auto *scrollArea = new QScrollArea(this);
+    scrollArea->setObjectName("playerSubtitleSettingsScroll");
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setFrameShape(QFrame::NoFrame);
+    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scrollArea->viewport()->setAutoFillBackground(false);
+
+    auto *contentBoxHost = new QWidget(scrollArea);
+    contentBoxHost->setObjectName("playerSubtitleSettingsScrollContent");
+    auto *contentBox = new QVBoxLayout(contentBoxHost);
+    contentBox->setContentsMargins(16, 8, 16, 16);
+    contentBox->setSpacing(10);
+    scrollArea->setWidget(contentBoxHost);
+    contentLayout()->addWidget(scrollArea);
 
     auto createInfoTile =
         [this](const QString &iconPath, const QString &title,
@@ -196,7 +213,7 @@ PlayerSubtitleSettingsDialog::PlayerSubtitleSettingsDialog(QWidget *parent)
     promptLabel->setObjectName("playerSubtitleSummaryText");
     promptLabel->setWordWrap(true);
     summaryLayout->addWidget(promptLabel);
-    contentLayout()->addWidget(summaryCard);
+    contentBox->addWidget(summaryCard);
 
     auto *fontTile = new QFrame(this);
     fontTile->setObjectName("playerSubtitleInlineComboTile");
@@ -222,7 +239,7 @@ PlayerSubtitleSettingsDialog::PlayerSubtitleSettingsDialog(QWidget *parent)
         fontTile, ConfigKeys::PlayerSubtitleFont, QString());
     fontCombo->setToolTip(tr("Choose the font family used for subtitle rendering"));
     fontLayout->addWidget(fontCombo, 0, Qt::AlignVCenter);
-    contentLayout()->addWidget(fontTile);
+    contentBox->addWidget(fontTile);
 
     auto *sliderGrid = new QGridLayout();
     sliderGrid->setContentsMargins(0, 0, 0, 0);
@@ -263,7 +280,7 @@ PlayerSubtitleSettingsDialog::PlayerSubtitleSettingsDialog(QWidget *parent)
                          SubtitleOptionUtils::SliderKind::ShadowOffset,
                          ConfigKeys::PlayerSubtitleShadowOffset),
         1, 2);
-    contentLayout()->addLayout(sliderGrid);
+    contentBox->addLayout(sliderGrid);
 
     // ---- 副字幕参数组（仅在"启用副字幕"全局开关开启时构建）----
     // 与主字幕同一套滑块；每项独立保存，未单独设置时回退主字幕对应值
@@ -272,7 +289,7 @@ PlayerSubtitleSettingsDialog::PlayerSubtitleSettingsDialog(QWidget *parent)
     if (secondaryEnabled) {
         auto *secondaryTitle = new QLabel(tr("Secondary Subtitle"), this);
         secondaryTitle->setObjectName("playerSubtitleTileTitle");
-        contentLayout()->addWidget(secondaryTitle);
+        contentBox->addWidget(secondaryTitle);
 
         auto *secondaryFontTile = new QFrame(this);
         secondaryFontTile->setObjectName("playerSubtitleInlineComboTile");
@@ -312,7 +329,7 @@ PlayerSubtitleSettingsDialog::PlayerSubtitleSettingsDialog(QWidget *parent)
             tr("Choose the font family used for the secondary subtitle"));
         secondaryFontLayout->addWidget(secondaryFontCombo, 0,
                                        Qt::AlignVCenter);
-        contentLayout()->addWidget(secondaryFontTile);
+        contentBox->addWidget(secondaryFontTile);
 
         // 回退值 = 主字幕当前值（位置额外上移，避免与主字幕重叠）。
         const auto mainSliderValue =
@@ -391,8 +408,12 @@ PlayerSubtitleSettingsDialog::PlayerSubtitleSettingsDialog(QWidget *parent)
                 mainSliderValue(ConfigKeys::PlayerSubtitleShadowOffset,
                                 SubtitleOptionUtils::SliderKind::ShadowOffset)),
             1, 2);
-        contentLayout()->addLayout(secondaryGrid);
+        contentBox->addLayout(secondaryGrid);
     }
 
-    contentLayout()->addStretch();
+    contentBox->addStretch();
+
+    // 对话框高度按内容自适应（+标题栏与边距）；超出播放窗口可用空间时由
+    // updateSurfaceBounds 收缩、内容由滚动区呈现。
+    setSurfacePreferredSize(QSize(620, contentBox->sizeHint().height() + 72));
 }

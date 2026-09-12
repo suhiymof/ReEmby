@@ -9271,6 +9271,42 @@ Address: %2</source>
         <source>Shadow Offset</source>
         <translation>阴影偏移</translation>
     </message>
+    <message>
+        <source>Secondary Subtitle</source>
+        <translation>副字幕</translation>
+    </message>
+    <message>
+        <source>Secondary Subtitle Font</source>
+        <translation>副字幕字体</translation>
+    </message>
+    <message>
+        <source>Choose the font family used for the secondary subtitle</source>
+        <translation>选择副字幕使用的字体</translation>
+    </message>
+    <message>
+        <source>Secondary Subtitle Timing</source>
+        <translation>副字幕时间</translation>
+    </message>
+    <message>
+        <source>Secondary Subtitle Size</source>
+        <translation>副字幕大小</translation>
+    </message>
+    <message>
+        <source>Secondary Subtitle Position</source>
+        <translation>副字幕位置</translation>
+    </message>
+    <message>
+        <source>Secondary Subtitle Scale</source>
+        <translation>副字幕缩放</translation>
+    </message>
+    <message>
+        <source>Secondary Subtitle Outline</source>
+        <translation>副字幕描边</translation>
+    </message>
+    <message>
+        <source>Secondary Subtitle Shadow</source>
+        <translation>副字幕阴影</translation>
+    </message>
 </context>
 
 <context>
@@ -9306,6 +9342,26 @@ Address: %2</source>
     <message>
         <source>Choose whether recent movies and season or episode switching appear in the right sidebar or the bottom HUD</source>
         <translation>选择最近电影与电视剧季集切换显示在右侧边栏还是底部 HUD</translation>
+    </message>
+    <message>
+        <source>Subtitles</source>
+        <translation>字幕</translation>
+    </message>
+    <message>
+        <source>Enable Secondary Subtitle</source>
+        <translation>启用副字幕</translation>
+    </message>
+    <message>
+        <source>Show a second content subtitle track. Adds secondary subtitle selection to the player subtitle menu, with its own style options in subtitle settings</source>
+        <translation>显示第二条内容字幕轨。播放器字幕菜单中会新增副字幕选择，字幕设置中提供独立的样式选项</translation>
+    </message>
+    <message>
+        <source>Allow Dragging Subtitles</source>
+        <translation>允许拖动字幕位置</translation>
+    </message>
+    <message>
+        <source>Hold a subtitle line in the player and drag vertically to move it. Turn off to adjust the position in subtitle settings only, so subtitles cannot be moved by accident</source>
+        <translation>在播放器中按住字幕上下拖动即可调整位置。关闭后仅能通过字幕设置调整位置，可避免误触移动字幕</translation>
     </message>
 </context>
 
@@ -9370,6 +9426,30 @@ Address: %2</source>
     <message>
         <source>No next media</source>
         <translation>没有下一个媒体</translation>
+    </message>
+    <message>
+        <source>Secondary Subtitle...</source>
+        <translation>副字幕…</translation>
+    </message>
+    <message>
+        <source>Disable Secondary Subtitle</source>
+        <translation>关闭副字幕</translation>
+    </message>
+    <message>
+        <source>Secondary Subtitle Disabled</source>
+        <translation>副字幕已关闭</translation>
+    </message>
+    <message>
+        <source>Secondary Subtitle: %1</source>
+        <translation>副字幕：%1</translation>
+    </message>
+    <message>
+        <source>Secondary subtitle requires native danmaku rendering</source>
+        <translation>副字幕需要将弹幕渲染方式设为原生（native-smooth）才能使用</translation>
+    </message>
+    <message>
+        <source>Subtitle Position: %1%</source>
+        <translation>字幕位置：%1%</translation>
     </message>
 </context>
 
