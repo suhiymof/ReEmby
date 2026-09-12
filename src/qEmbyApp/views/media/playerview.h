@@ -63,6 +63,8 @@ signals:
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
+    void showEvent(QShowEvent *event) override;
+    void hideEvent(QHideEvent *event) override;
     bool eventFilter(QObject *watched, QEvent *event) override;
     
     void keyPressEvent(QKeyEvent *event) override;
@@ -122,24 +124,23 @@ private slots:
 
 private:
     void setupUi();
-    // 独立播放窗口模式：把覆盖式 HUD 全部提升为原生子窗口并抬到 MpvWidget 之上，
-    // 避免被 mpv d3d11 直绘的 MpvWidget (WA_NativeWindow) 原生窗口遮盖。
+    // 独立播放窗口模式（B3）：把全部覆盖层（HUD/侧边栏/统计/加载/OSD/弹幕）
+    // 迁进透明 HUD 顶层窗口 —— 原生子窗口（WS_CHILD）拿不到 per-pixel alpha，
+    // 顶层窗口可以。z-order 靠 owned-window 关系（HUD 窗口永远在播放窗口之上）。
     void applyStandaloneOverlay();
-    // B3 spike：创建/复用透明 HUD 顶层窗口（owned by 播放窗口），并把
-    // m_topHUD/m_bottomHUD reparent 进去。
+    // 创建透明 HUD 顶层窗口（owned by 播放窗口；所有覆盖层的宿主，常显）。
     void ensureStandaloneHudWindow();
-    // B3 spike：把 HUD 透明窗口的几何同步到 PlayerView 客户区（全局坐标）。
+    // 把 HUD 透明窗口的几何同步到 PlayerView 客户区（全局坐标；origin 与客户区
+    // 重合，因此覆盖层的相对坐标无需换算）。
     void syncStandaloneHudWindow();
-    // 独立播放窗口模式：给原生子窗口设 WA_TranslucentBackground → Qt 内部
-    // per-pixel alpha 合成（UpdateLayeredWindow + BLENDFUNCTION{AC_SRC_ALPHA}）。
-    // 不要再手动 SetWindowLongPtr(WS_EX_LAYERED)：applyWindowFlags 会整体
-    // 覆写 GWL_EXSTYLE（重算值不带该位）→ 手动加的位被擦掉。
+    // 诊断：确认 Qt 是否真的为 HUD 顶层窗口启用 WS_EX_LAYERED（per-pixel alpha
+    // 路径）。只对顶层窗口调用 winId()——对普通子控件调用会强制创建原生窗口。
     void logStandaloneLayerDiagnostics();
-    // 独立播放窗口模式：HUD 是原生窗口，淡入淡出（opacity 动画）对其无效，会一直
-    // 常驻；改用 setVisible 显隐（子控件随容器一起显隐）。
+    // 独立播放窗口模式：HUD 窗口常显（背景全透明），这里只切换"跟随鼠标活动"
+    // 的元素（top/bottom HUD、台标、网速）；侧边栏/统计/加载/OSD 等各自独立显隐。
     void setStandaloneHudVisible(bool visible);
-    // 独立播放窗口模式：动态创建的弹层（菜单/设置对话框）单点提升为原生子窗口，
-    // 让超出固定 HUD 区域的部分也浮在视频层之上（弹层显示前调用）。
+    // 独立播放窗口模式：把动态创建的弹层（菜单/设置对话框）迁进透明 HUD 窗口
+    // （用全局坐标换算，兼容旧 parent 非本视图的情况）。
     void promoteStandaloneLayer(QWidget *layer);
     void updateTitleElision();
     void updateOverlayLayout();
@@ -237,9 +238,10 @@ private:
         QString serverId = QString());
 
     MpvWidget *m_mpvWidget;
-    // B3 spike：独立播放（wid）模式下的透明 HUD 顶层窗口。顶层窗口支持
-    // per-pixel alpha（区别于 WS_CHILD 子窗口），m_topHUD/m_bottomHUD reparent
-    // 进它之后，QSS 的 rgba 渐变背景能真正透出 mpv 渲染的视频。
+    // 独立播放（wid）模式下的透明 HUD 顶层窗口：所有覆盖层的宿主（top/bottom
+    // HUD、台标、网速、侧边栏、统计、加载、OSD、弹幕层、动态弹层）。
+    // 顶层窗口支持 per-pixel alpha（区别于 WS_CHILD 子窗口），QSS 的 rgba
+    // 背景能真正透出 mpv 渲染的视频；窗口本身常显（背景全透明）。
     QWidget *m_hudWindow = nullptr;
     NativeDanmakuOverlay *m_nativeDanmakuOverlay = nullptr;
     // true = 独立播放窗口（mpv 走 gpu-next + wid 自建渲染，支持杜比视界 P5）。
