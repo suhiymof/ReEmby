@@ -356,6 +356,19 @@ bool isAutomaticLanguageRules(const QString &rawRules) {
     return rules.isEmpty() || rules.contains(QStringLiteral("auto"));
 }
 
+// 规则里是否存在"具体语言"项（排除 auto/none 占位符）——决定字幕"无匹配"时
+// 的行为：有具体语言 → 保持空白（不自动选）；纯 auto → 走自动兜底。
+bool hasConcreteLanguageRule(const QString &rawRules) {
+    const QStringList rules = splitLanguageRules(rawRules);
+    for (const QString &rule : rules) {
+        if (rule.compare(QLatin1String("auto"), Qt::CaseInsensitive) != 0 &&
+            rule.compare(QLatin1String("none"), Qt::CaseInsensitive) != 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool isSubtitleDisabled(const QString &rawRules) {
     return splitLanguageRules(rawRules).contains(QStringLiteral("none"));
 }
@@ -364,13 +377,19 @@ int findPreferredStreamIndex(const QList<MediaStreamInfo> &mediaStreams,
                              const QString &streamType,
                              const QString &rawRules) {
     const QStringList rules = splitLanguageRules(rawRules);
-    if (rules.isEmpty() || rules.contains(QStringLiteral("auto")) ||
+    if (rules.isEmpty() ||
         (streamType == QStringLiteral("Subtitle") &&
          rules.contains(QStringLiteral("none")))) {
         return -1;
     }
 
     for (const QString &rule : rules) {
+        // "auto"/"none" 是占位符而非可匹配的语言：跳过并继续尝试后续规则。
+        // （修复 "auto,chi" 曾因整串包含 auto 而直接返回"无偏好"、chi 被忽略。）
+        if (rule.compare(QLatin1String("auto"), Qt::CaseInsensitive) == 0 ||
+            rule.compare(QLatin1String("none"), Qt::CaseInsensitive) == 0) {
+            continue;
+        }
         int bestPosition = -1;
         int bestRank = std::numeric_limits<int>::max();
         for (int i = 0; i < mediaStreams.size(); ++i) {
@@ -403,7 +422,6 @@ QList<int> preferredStreamOrder(const QList<MediaStreamInfo> &mediaStreams,
 
     const QStringList rules = splitLanguageRules(rawRules);
     if (remaining.size() <= 1 || rules.isEmpty() ||
-        rules.contains(QStringLiteral("auto")) ||
         (streamType == QStringLiteral("Subtitle") &&
          rules.contains(QStringLiteral("none")))) {
         return remaining;
@@ -412,6 +430,11 @@ QList<int> preferredStreamOrder(const QList<MediaStreamInfo> &mediaStreams,
     QList<int> ordered;
     ordered.reserve(remaining.size());
     for (const QString &rule : rules) {
+        // 跳过 auto/none 占位符（同 findPreferredStreamIndex）。
+        if (rule.compare(QLatin1String("auto"), Qt::CaseInsensitive) == 0 ||
+            rule.compare(QLatin1String("none"), Qt::CaseInsensitive) == 0) {
+            continue;
+        }
         QList<int> matches;
         for (const int position : remaining) {
             if (streamMatchRank(mediaStreams[position], rule) >= 0) {
@@ -522,6 +545,15 @@ void applyPreferredStreamRules(MediaSourceInfo &selectedSource,
         for (MediaStreamInfo &stream : selectedSource.mediaStreams) {
             if (stream.type == QStringLiteral("Subtitle")) {
                 stream.isDefault = (stream.index == bestSubIdx);
+            }
+        }
+    } else if (hasConcreteLanguageRule(subtitleRules)) {
+        // 配置了具体语言（如 "auto,chi" 里的 chi）但没有任何轨匹配 → 保持
+        // "空"：不自动 fallback 第一条、也不采用服务端 default 标记。
+        subtitleDecision = QStringLiteral("no-language-match");
+        for (MediaStreamInfo &stream : selectedSource.mediaStreams) {
+            if (stream.type == QStringLiteral("Subtitle")) {
+                stream.isDefault = false;
             }
         }
     } else if (firstSubIdx >= 0 && !hasDefaultSub) {
