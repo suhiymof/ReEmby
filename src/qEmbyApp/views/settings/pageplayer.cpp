@@ -166,7 +166,11 @@ PagePlayer::PagePlayer(QEmbyCore *core, QWidget *parent)
     prefetchSlider->setRange(0, 100);
     prefetchSlider->setMinimumWidth(200);
     auto *prefetchValue = new QLabel(prefetchWidget);
+    // 数值标签默认走 palette 文字色，在暗色主题下几乎看不清（用户反馈）。
+    // 交给主题 QSS 上色：#settingsProgressValue（深色主题近白 / 浅色主题深灰）。
+    prefetchValue->setObjectName(QStringLiteral("settingsProgressValue"));
     prefetchValue->setMinimumWidth(36);
+    prefetchValue->setAlignment(Qt::AlignCenter);
     row->addWidget(prefetchSlider, 1);
     row->addWidget(prefetchValue);
 

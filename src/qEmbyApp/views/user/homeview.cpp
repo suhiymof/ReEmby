@@ -50,6 +50,7 @@
 #include <QPointer> 
 #include <QPropertyAnimation>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QScrollBar>
 #include <QSize>
 #include <QShowEvent>
@@ -814,19 +815,38 @@ void HomeView::setupSidebar()
     m_serverInfoLayout->addLayout(m_serverNameLayout);
     layout->addWidget(serverInfoWidget);
 
+    // —— 中部滚动区 ——
+    // 聚合 / 当前服 / 媒体库这几组内容在窗口高度不足时需要滚动：否则
+    // QVBoxLayout 会把子控件强行压缩到各自 minimum 之下——按钮被压扁、文字
+    // 互相重叠（用户截图反馈）。顶部服务器卡与底部用户/操作区保持固定。
+    auto *sidebarScroll = new QScrollArea(m_sidebar);
+    sidebarScroll->setObjectName("sidebar-scroll");
+    sidebarScroll->setFrameShape(QFrame::NoFrame);
+    sidebarScroll->setWidgetResizable(true);
+    sidebarScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    sidebarScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    // 关闭 viewport 自动填充（配合 QSS 的 transparent），让侧边栏背景透出来。
+    sidebarScroll->viewport()->setAutoFillBackground(false);
+
+    auto *sidebarScrollContent = new QWidget();
+    sidebarScrollContent->setObjectName("sidebar-scroll-content");
+    auto *scrollLayout = new QVBoxLayout(sidebarScrollContent);
+    scrollLayout->setContentsMargins(0, 0, 0, 0);
+    scrollLayout->setSpacing(6);
+
     // —— 聚合分组：跨服务器搜索/历史/收藏 ——
     // 布局顺序（用户确认）：服务器信息 → 聚合分组 → 当前服分组 → 媒体库。
     // 聚合搜索是输入框（跨所有已添加服务器），聚合历史/收藏是按钮（点击进入）。
     m_aggregateGroupTitle = new QLabel(tr("聚合"), m_sidebar);
     m_aggregateGroupTitle->setObjectName("sidebar-title");
-    layout->addWidget(m_aggregateGroupTitle);
+    scrollLayout->addWidget(m_aggregateGroupTitle);
 
     m_aggregatedSearchBox = new QLineEdit(m_sidebar);
     m_aggregatedSearchBox->setObjectName("sidebar-search");
     m_aggregatedSearchBox->setPlaceholderText(tr("聚合搜索..."));
     m_aggregatedSearchBox->setClearButtonEnabled(true);
     m_aggregatedSearchBox->setFocusPolicy(Qt::ClickFocus);
-    layout->addWidget(m_aggregatedSearchBox);
+    scrollLayout->addWidget(m_aggregatedSearchBox);
 
 m_btnAggregatedHistory = new QPushButton(tr("聚合历史"), m_sidebar);
 m_btnAggregatedFavorites = new QPushButton(tr("聚合收藏"), m_sidebar);
@@ -834,8 +854,8 @@ m_btnAggregatedFavorites = new QPushButton(tr("聚合收藏"), m_sidebar);
     m_btnAggregatedFavorites->setObjectName("sidebar-btn");
     m_btnAggregatedHistory->setCursor(Qt::PointingHandCursor);
     m_btnAggregatedFavorites->setCursor(Qt::PointingHandCursor);
-    layout->addWidget(m_btnAggregatedHistory);
-    layout->addWidget(m_btnAggregatedFavorites);
+    scrollLayout->addWidget(m_btnAggregatedHistory);
+    scrollLayout->addWidget(m_btnAggregatedFavorites);
 
     // 聚合搜索回车 → 触发跨服务器搜索（阶段3 连接 aggregatedSearchRequested）。
     connect(m_aggregatedSearchBox, &QLineEdit::returnPressed, this,
@@ -861,7 +881,7 @@ m_btnAggregatedFavorites = new QPushButton(tr("聚合收藏"), m_sidebar);
     m_currentServerLabel = new QLabel(tr("当前服"), m_sidebar);
     m_currentServerLabel->setObjectName("sidebar-title");
     m_currentServerLabel->setProperty("isCurrentServerGroup", true);
-    layout->addWidget(m_currentServerLabel);
+    scrollLayout->addWidget(m_currentServerLabel);
 
     m_navArea = new QWidget(m_sidebar);
     auto *navLayout = new QVBoxLayout(m_navArea);
@@ -911,12 +931,12 @@ m_btnAggregatedFavorites = new QPushButton(tr("聚合收藏"), m_sidebar);
     navLayout->addWidget(sep1);
     navLayout->addSpacing(3);
 
-    layout->addWidget(m_navArea);
+    scrollLayout->addWidget(m_navArea);
 
     
     auto *libTitle = new QLabel(tr("MEDIA"), m_sidebar);
     libTitle->setObjectName("sidebar-title");
-    layout->addWidget(libTitle);
+    scrollLayout->addWidget(libTitle);
 
     m_libraryList = new QListWidget(m_sidebar);
     m_libraryList->setObjectName("sidebar-list");
@@ -925,11 +945,19 @@ m_btnAggregatedFavorites = new QPushButton(tr("聚合收藏"), m_sidebar);
     m_libraryList->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     m_libraryList->setTextElideMode(Qt::ElideRight);
     m_libraryList->setWordWrap(false);
+    // 滚动区内的列表需要明确最小高度：否则滚动区内容的最小高度算不出来，
+    // 窗口变矮时无法触发滚动条（内容会被压扁）。
+    m_libraryList->setMinimumHeight(150);
     m_sidebarLibraryScrollController =
         new SmoothScrollController(m_libraryList->verticalScrollBar(), this);
     m_sidebarLibraryScrollController->setDuration(160);
     m_libraryList->viewport()->installEventFilter(this);
-    layout->addWidget(m_libraryList, 1);
+    scrollLayout->addWidget(m_libraryList, 1);
+
+    // 滚动区内容定稿并挂进主布局：吸收中部多余空间，窗口变矮时自动出现
+    // 滚动条（而不是把控件压变形）。
+    sidebarScroll->setWidget(sidebarScrollContent);
+    layout->addWidget(sidebarScroll, 1);
 
     
 

@@ -104,14 +104,22 @@ PageAbout::PageAbout(QEmbyCore *core, QWidget *parent) : SettingsPageBase(core, 
                 UpdateProgressDialog::startUpdate(info, window());
             });
 
-    m_authorLabel = new QLabel(tr("© 2026 AlanHJ. All rights reserved."), this);
+    // 说明：MIT 许可（见 LICENSE）要求保留原始版权声明，fork 维护者信息单独
+    // 一行标注。
+    m_authorLabel = new QLabel(tr("© 2025-2026 AlanHJ. All rights reserved."), this);
     m_authorLabel->setAlignment(Qt::AlignCenter);
     m_authorLabel->setObjectName("AboutAuthorLabel");
     m_mainLayout->addWidget(m_authorLabel);
 
+    // 维护者署名：固定英文（不走 tr，两种语言下保持原文）。
+    auto *forkOwnerLabel = new QLabel(QStringLiteral("Fork maintained by suhiymof"), this);
+    forkOwnerLabel->setAlignment(Qt::AlignCenter);
+    forkOwnerLabel->setObjectName("AboutAuthorLabel");
+    m_mainLayout->addWidget(forkOwnerLabel);
+
     m_linkLabel = new QLabel(this);
-    m_linkLabel->setText(QString("<a href=\"https://github.com/AlanHJ/qEmby\">%1</a> &nbsp;|&nbsp; "
-                                 "<a href=\"https://github.com/AlanHJ/qEmby/issues\">%2</a>")
+    m_linkLabel->setText(QString("<a href=\"https://github.com/suhiymof/qEmby\">%1</a> &nbsp;|&nbsp; "
+                                 "<a href=\"https://github.com/suhiymof/qEmby/issues\">%2</a>")
                              .arg(tr("GitHub Repository"))
                              .arg(tr("Report an Issue")));
     m_linkLabel->setOpenExternalLinks(true);
@@ -125,7 +133,8 @@ PageAbout::PageAbout(QEmbyCore *core, QWidget *parent) : SettingsPageBase(core, 
     line->setObjectName("AboutSeparatorLine");
     m_mainLayout->addWidget(line);
 
-    m_licenseLabel = new QLabel(tr("This project is open-source software built with Qt 6 and modern C++.\n"
+    m_licenseLabel = new QLabel(tr("This project is open-source software built with Qt 6, modern C++ and the "
+                                   "libmpv playback core.\n"
                                    "Special thanks to the Emby and Jellyfin communities for their fantastic APIs."),
                                 this);
     m_licenseLabel->setAlignment(Qt::AlignCenter);

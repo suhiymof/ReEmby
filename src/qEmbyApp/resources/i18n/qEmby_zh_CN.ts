@@ -2857,9 +2857,9 @@ Release notes:
         <translation>开源许可</translation>
     </message>
     <message>
-        <source>This project is open-source software built with Qt 6 and modern C++.
+        <source>This project is open-source software built with Qt 6, modern C++ and the libmpv playback core.
 Special thanks to the Emby and Jellyfin communities for their fantastic APIs.</source>
-        <translation>本项目是基于 Qt 6 与现代 C++ 构建的开源软件。
+        <translation>本项目是基于 Qt 6、现代 C++ 与 libmpv 播放内核构建的开源软件。
 特别感谢 Emby 与 Jellyfin 社区提供的出色 API。</translation>
     </message>
 </context>

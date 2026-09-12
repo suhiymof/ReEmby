@@ -1663,6 +1663,13 @@ QWidget#floating-sidebar {
     border-right: 1px solid #334155;
 }
 
+/* 侧边栏中部滚动区：透明以露出侧边栏背景（滚动条沿用全局 QScrollBar 样式）。 */
+QScrollArea#sidebar-scroll,
+QWidget#sidebar-scroll-content {
+    background: transparent;
+    border: none;
+}
+
 QWidget#floating-sidebar[pinned="true"][sidebarSide="left"] {
     background-color: #0F172A;
     border-right: 1px solid #334155;
@@ -3210,6 +3217,15 @@ LoadingOverlay {
 #SettingsCardDesc {
     font-size: 12px;
     color: #64748B;
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+
+/* 4.2 设置页滑块数值（如"预加载下一集"的百分比）：默认 palette 文字色在
+   暗色主题下几乎不可读，这里显式给近白。 */
+QLabel#settingsProgressValue {
+    font-size: 13px;
+    font-weight: 600;
+    color: #F0F0F0;
     font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
 }
 
