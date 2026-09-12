@@ -70,6 +70,10 @@ private:
     DanmakuMediaContext buildMediaContext(const PlayerLaunchContext &context) const;
     bool isDanmakuTrackMap(const QVariantMap &trackMap) const;
     void onTrackListChanged();
+    // 读 mpv 原始 track-list 里的内容字幕轨（保留原生 selected 字段）。
+    // 菜单展示路径（contentSubtitleTracks）会剥离该字段并重插"用户选择"，
+    // 因此任何需要判断"实际在播的轨"的逻辑必须用这个原始列表。
+    QList<QVariantMap> rawSubtitleTracks() const;
     void syncSubtitleSelectionFromTrackList();
     void syncSecondarySubtitleSelectionFromTrackList();
     void attachDanmakuTrack();

@@ -24,11 +24,6 @@ namespace {
 
 constexpr auto kDanmakuTrackTitle = "[qEmby] Danmaku";
 
-bool trackSelected(const QVariantMap &trackMap)
-{
-    return trackMap.value(QStringLiteral("selected")).toBool();
-}
-
 QString contextTitle(const DanmakuMediaContext &context)
 {
     const QString displayTitle = context.displayTitle().trimmed();
@@ -319,16 +314,14 @@ QString PlayerDanmakuController::activeEndpointId() const
     return m_activeEndpointId;
 }
 
-QList<QVariantMap> PlayerDanmakuController::contentSubtitleTracks(
-    bool forSecondary) const
+QList<QVariantMap> PlayerDanmakuController::rawSubtitleTracks() const
 {
+    // 原始读取：保留 mpv track-list 自带的所有字段（含 selected）。
     QList<QVariantMap> tracks;
     if (!m_mpvWidget || !m_mpvWidget->controller()) {
         return tracks;
     }
 
-    const int selectedTrackId =
-        forSecondary ? m_secondarySubtitleTrackId : m_selectedSubtitleTrackId;
     const QVariantList trackList =
         m_mpvWidget->controller()->getProperty(QStringLiteral("track-list")).toList();
     for (const QVariant &value : trackList) {
@@ -340,15 +333,28 @@ QList<QVariantMap> PlayerDanmakuController::contentSubtitleTracks(
         if (isDanmakuTrackMap(trackMap)) {
             continue;
         }
+        tracks.append(trackMap);
+    }
+    return tracks;
+}
+
+QList<QVariantMap> PlayerDanmakuController::contentSubtitleTracks(
+    bool forSecondary) const
+{
+    const int selectedTrackId =
+        forSecondary ? m_secondarySubtitleTrackId : m_selectedSubtitleTrackId;
+    QList<QVariantMap> tracks = rawSubtitleTracks();
+    for (QVariantMap &trackMap : tracks) {
         // mpv 的 track-list 原始条目自带 selected 字段（当前播放中的轨），与
         // 菜单里的"用户选择"标记不是一回事——先清除，避免主/副字幕菜单的
         // 勾选互相混入（例如副字幕菜单里同时出现主字幕轨的勾、或多勾）。
+        // 注意：需要读"实际在播的轨"的逻辑（syncSubtitleSelectionFromTrackList）
+        // 必须走 rawSubtitleTracks()，不要用这个剥离过的列表。
         trackMap.remove(QStringLiteral("selected"));
         if (selectedTrackId > 0 &&
             trackMap.value(QStringLiteral("id")).toInt() == selectedTrackId) {
             trackMap.insert(QStringLiteral("selected"), true);
         }
-        tracks.append(trackMap);
     }
     return tracks;
 }
@@ -640,24 +646,58 @@ void PlayerDanmakuController::onTrackListChanged()
 
 void PlayerDanmakuController::syncSubtitleSelectionFromTrackList()
 {
-    const QList<QVariantMap> tracks = contentSubtitleTracks();
-    const int previousTrackId = m_selectedSubtitleTrackId;
-    m_selectedSubtitleTrackId = -1;
-    for (const QVariantMap &trackMap : tracks) {
-        if (trackSelected(trackMap)) {
-            m_selectedSubtitleTrackId = trackMap.value(QStringLiteral("id")).toInt();
-            break;
-        }
+    if (!m_mpvWidget || !m_mpvWidget->controller()) {
+        return;
     }
+    const int previousTrackId = m_selectedSubtitleTrackId;
 
-    if (m_selectedSubtitleTrackId <= 0 && previousTrackId > 0) {
+    // 从 mpv 的字幕通道（sid / secondary-sid）读取"实际在播的内容主字幕"。
+    // 不要用 track-list 的 selected 字段：菜单展示路径
+    // （contentSubtitleTracks）会剥离它并重插"用户选择"，用它会导致同步
+    // 读到自己刚写回的值（永远同步不到 mpv 的真实状态）。
+    //
+    // 通道语义：ass-track 弹幕模式下弹幕占用 sid，内容主字幕物理上位于
+    // secondary-sid；native-smooth 双字幕场景下主字幕在 sid、副字幕在
+    // secondary-sid——优先取 sid 命中的内容字幕轨，其次取 secondary-sid。
+    const auto readChannelTrackId = [this](const char *name) -> int {
+        const QVariant value =
+            m_mpvWidget->controller()->getProperty(QString::fromLatin1(name));
+        bool ok = false;
+        const int id = value.toInt(&ok);
+        return ok ? id : -1;
+    };
+    const int sidTrackId = readChannelTrackId("sid");
+    const int secondaryTrackId = readChannelTrackId("secondary-sid");
+    const QList<QVariantMap> tracks = rawSubtitleTracks();
+
+    int resolved = -1;
+    if (sidTrackId > 0) {
         for (const QVariantMap &trackMap : tracks) {
-            if (trackMap.value(QStringLiteral("id")).toInt() == previousTrackId) {
-                m_selectedSubtitleTrackId = previousTrackId;
+            if (trackMap.value(QStringLiteral("id")).toInt() == sidTrackId) {
+                resolved = sidTrackId;
                 break;
             }
         }
     }
+    if (resolved <= 0 && secondaryTrackId > 0) {
+        for (const QVariantMap &trackMap : tracks) {
+            if (trackMap.value(QStringLiteral("id")).toInt() == secondaryTrackId) {
+                resolved = secondaryTrackId;
+                break;
+            }
+        }
+    }
+    // 两个通道都没有内容字幕（显式关闭字幕、或切集瞬间 track-list 尚未
+    // 重建）时，保留仍然存在的上一次选择。
+    if (resolved <= 0 && previousTrackId > 0) {
+        for (const QVariantMap &trackMap : tracks) {
+            if (trackMap.value(QStringLiteral("id")).toInt() == previousTrackId) {
+                resolved = previousTrackId;
+                break;
+            }
+        }
+    }
+    m_selectedSubtitleTrackId = resolved;
 }
 
 void PlayerDanmakuController::syncSecondarySubtitleSelectionFromTrackList()

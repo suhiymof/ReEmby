@@ -3723,8 +3723,8 @@ void PlayerView::updateSubtitleDrag(const QPoint &globalPos)
     const int deltaY = globalPos.y() - m_subtitleDragStartGlobalPos.y();
     double newPos = m_subtitleDragStartPos +
                     deltaY * 100.0 / qMax(1, m_subtitleDragViewHeight);
-    // 与字幕设置里的位置滑块保持一致的范围（60-100）。
-    newPos = qBound(60.0, newPos, 100.0);
+    // 与字幕设置里的位置滑块保持一致的范围（0-100）。
+    newPos = qBound(0.0, newPos, 100.0);
     if (qFuzzyCompare(newPos, m_subtitleDragLastPos))
     {
         return;
@@ -3738,7 +3738,7 @@ void PlayerView::updateSubtitleDrag(const QPoint &globalPos)
 
 void PlayerView::finishSubtitleDrag()
 {
-    const int value = qBound(60, qRound(m_subtitleDragLastPos), 100);
+    const int value = qBound(0, qRound(m_subtitleDragLastPos), 100);
     const QString key =
         m_subtitleDragTargetSecondary
             ? QString::fromLatin1(ConfigKeys::PlayerSubtitleSecondaryPosition)

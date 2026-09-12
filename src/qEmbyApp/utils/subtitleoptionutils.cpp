@@ -37,7 +37,7 @@ SliderSpec sliderSpec(SliderKind kind)
     case SliderKind::FontSize:
         return {18, 72, 1, 4, 38};
     case SliderKind::Position:
-        return {60, 100, 1, 5, 92};
+        return {0, 100, 1, 5, 92};
     case SliderKind::OutlineSize:
         return {0, 40, 1, 5, 17};
     case SliderKind::ShadowOffset:

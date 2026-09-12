@@ -36,8 +36,8 @@ QString readSubtitleFontFamily()
 
 // 副字幕未单独设置位置时的回退：主字幕位置上移（偏移量见
 // SubtitleOptionUtils::kSecondaryPositionFallbackOffset，数值更小 = 更靠画面
-// 中上部），避免两条字幕叠在同一条线上。位置滑块合法范围为 60-100。
-constexpr int kSecondaryPositionFallbackMin = 60;
+// 上部），避免两条字幕叠在同一条线上。位置合法范围为 0-100。
+constexpr int kSecondaryPositionFallbackMin = 0;
 
 } 
 
