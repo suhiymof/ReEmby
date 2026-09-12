@@ -3421,9 +3421,24 @@ bool PlayerView::eventFilter(QObject *watched, QEvent *event)
                 // 字幕拖动：按在字幕带内时先进入待定状态，移动超过阈值后由
                 // MouseMove 分支升级为拖动；拖动开关关闭时此处直接返回 false。
                 m_subtitleDragPending = false;
+                bool subtitleDragHit = false;
                 if (!isOnHud)
                 {
-                    beginSubtitleDragIfHit(me->globalPosition().toPoint());
+                    subtitleDragHit = beginSubtitleDragIfHit(me->globalPosition().toPoint());
+                }
+                // 诊断：拖动链路第一环——事件到达谁、是否命中字幕带。
+                if (ConfigStore::instance()->get<bool>(ConfigKeys::PlayerSubtitleDragEnabled, false))
+                {
+                    qInfo().noquote()
+                        << "[SubtitleDrag] press"
+                        << "| watched:" << (watched == m_mpvWidget ? QStringLiteral("mpvWidget")
+                                          : watched == this ? QStringLiteral("playerView")
+                                          : watched == m_hudWindow ? QStringLiteral("hudWindow")
+                                          : watched == m_topHUD ? QStringLiteral("topHUD")
+                                          : watched == m_bottomHUD ? QStringLiteral("bottomHUD")
+                                          : QStringLiteral("other"))
+                        << "| isOnHud:" << isOnHud
+                        << "| hit:" << subtitleDragHit;
                 }
             }
         }
@@ -3454,6 +3469,11 @@ bool PlayerView::eventFilter(QObject *watched, QEvent *event)
                         m_subtitleDragActive = true;
                         m_didDrag = true; 
                         m_longPressHandler->stopMouseEdgeLongPress();
+                        qInfo().noquote()
+                            << "[SubtitleDrag] active | startPos:" << m_subtitleDragStartPos
+                            << "| target:" << (m_subtitleDragTargetSecondary
+                                                   ? QStringLiteral("secondary")
+                                                   : QStringLiteral("primary"));
                     }
                     if (m_subtitleDragActive)
                     {
@@ -3624,6 +3644,8 @@ bool PlayerView::beginSubtitleDragIfHit(const QPoint &globalPos)
     bool foundWritesSecondaryPos = false;
     double foundPos = 0.0;
     double bestDistance = tolerance;
+    double mainDistance = -1.0;      // -1 = 候选不适用（未选中/被占轨）
+    double secondaryDistance = -1.0;
 
     // 候选 1：内容主字幕（已选中时）
     if (m_danmakuController->selectedSubtitleTrackId() > 0)
@@ -3631,14 +3653,14 @@ bool PlayerView::beginSubtitleDragIfHit(const QPoint &globalPos)
         const double pos = contentOnSecondaryChannel
                                ? readMpvPos("secondary-sub-pos")
                                : readMpvPos("sub-pos");
-        const double distance = qAbs(localPos.y() - referenceY(pos));
-        if (distance < bestDistance)
+        mainDistance = qAbs(localPos.y() - referenceY(pos));
+        if (mainDistance < bestDistance)
         {
             found = true;
             foundTargetSecondary = false;
             foundWritesSecondaryPos = contentOnSecondaryChannel;
             foundPos = pos;
-            bestDistance = distance;
+            bestDistance = mainDistance;
         }
     }
 
@@ -3649,8 +3671,8 @@ bool PlayerView::beginSubtitleDragIfHit(const QPoint &globalPos)
         m_danmakuController->secondarySubtitleTrackId() > 0)
     {
         const double pos = readMpvPos("secondary-sub-pos");
-        const double distance = qAbs(localPos.y() - referenceY(pos));
-        if (distance < bestDistance)
+        secondaryDistance = qAbs(localPos.y() - referenceY(pos));
+        if (secondaryDistance < bestDistance)
         {
             found = true;
             foundTargetSecondary = true;
@@ -3658,6 +3680,25 @@ bool PlayerView::beginSubtitleDragIfHit(const QPoint &globalPos)
             foundPos = pos;
         }
     }
+
+    // 诊断：命中判定的全部输入（几何换算 + 距离 + 容差）。
+    qInfo().noquote()
+        << "[SubtitleDrag] hit test"
+        << "| selectedId:" << m_danmakuController->selectedSubtitleTrackId()
+        << "| secondaryId:" << m_danmakuController->secondarySubtitleTrackId()
+        << "| contentOnSecondary:" << contentOnSecondaryChannel
+        << "| display:" << QStringLiteral("%1x%2").arg(displayW).arg(displayH)
+        << "| widgetH:" << m_mpvWidget->height()
+        << "| videoTop:" << videoTop
+        << "| localY:" << localPos.y()
+        << "| subPos:" << readMpvPos("sub-pos")
+        << "| secPos:" << readMpvPos("secondary-sub-pos")
+        << "| mainDist:" << mainDistance
+        << "| secDist:" << secondaryDistance
+        << "| tolerance:" << tolerance
+        << "| found:" << found
+        << "| target:" << (foundTargetSecondary ? QStringLiteral("secondary")
+                                                : QStringLiteral("primary"));
 
     if (!found)
     {
@@ -3709,6 +3750,11 @@ void PlayerView::finishSubtitleDrag()
     {
         ConfigStore::instance()->set(key, value);
     }
+    qInfo().noquote()
+        << "[SubtitleDrag] finish | value:" << value
+        << "| target:" << (m_subtitleDragTargetSecondary ? QStringLiteral("secondary")
+                                                         : QStringLiteral("primary"))
+        << "| writesSecondaryPos:" << m_subtitleDragWritesSecondaryPos;
     showToast(tr("Subtitle Position: %1%").arg(value));
 }
 
