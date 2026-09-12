@@ -3200,7 +3200,9 @@ QScrollBar#modernMenuScrollBar::sub-page:vertical {
 /* =========================================
    全局 Toast 组件样式 (极简重绘版 - 明亮主题)
    ========================================= */
-ModernToast {
+/* Toast 的可见表面是内层 #toastSurface 子控件（窗口额外留出阴影扩散区，
+   见 moderntoast.cpp 的 kToastShadowPadding 说明），样式挂在该控件上。 */
+#toastSurface {
     background-color: rgba(250, 250, 250, 0.95);
     /* 质感背景：使用高透明度、略微偏暖的纯白色，模拟毛玻璃底色 */
     border: 1px solid rgba(0, 0, 0, 0.10);

@@ -22,7 +22,7 @@ protected:
     explicit ModernToast(QWidget *parent = nullptr);
     ~ModernToast() override;
 
-    void paintEvent(QPaintEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 
 private:
     
@@ -31,11 +31,19 @@ private:
     QRect resolveAnchorRect() const;
     QRect textRect() const;
     QSize wrappedTextSize(const QFont& font, int maxTextWidth) const;
+    // 把内层 surface 的几何同步为窗口 rect 内缩 kToastShadowPadding 的区域
+    // （阴影扩散留白；窗口自身不绘制任何内容）。
+    void syncSurfaceGeometry();
 
     qreal textScale() const { return m_textScale; }
     void setTextScale(qreal scale);
 
     static QPointer<ModernToast> s_instance;
+
+    // 内层实心表面：QSS 背景（#toastSurface）、drop-shadow effect、文字都画在
+    // 它上面。它比窗口小一圈（四边各留阴影扩散所需的 kToastShadowPadding），
+    // 因此阴影不会画到窗口边界外（layered 窗口脏区越界会导致整帧被系统拒绝）。
+    QWidget *m_surface = nullptr;
 
     QString m_message;
     QString m_wrappedMessage;
