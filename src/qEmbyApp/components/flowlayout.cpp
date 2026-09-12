@@ -123,9 +123,17 @@ QSize FlowLayout::sizeHint() const
         width = geometry().width();
     }
 
+    // 估算高度用的宽度：setup 阶段（widget 尚未布局）所有祖先宽度都是 0，
+    // 此时若直接跳过 heightForWidth，sizeHint 只剩 minimumSize()（单个 item 的
+    // 最小尺寸）→ 外层 QVBoxLayout 据此分配的高度不足 → 内容被裁至不可见
+    // （详情页行动作按钮整行消失的根因）。这里用典型内容宽度兜底估算高度；
+    // 布局稳定后外层会带着真实宽度重新调用，届时高度自然修正。
+    constexpr int kFallbackWidthForHeight = 900;
+    const int widthForHeight = (width > 0) ? width : kFallbackWidthForHeight;
+    size.setHeight(heightForWidth(widthForHeight));
+
     if (width > 0) {
         size.setWidth(qMax(size.width(), width));
-        size.setHeight(heightForWidth(width));
     }
 
     return size;
