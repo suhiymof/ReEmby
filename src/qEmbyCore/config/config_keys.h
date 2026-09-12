@@ -194,6 +194,11 @@ constexpr const char* PlayerSubtitleSecondaryShadowOffset =
     "player/subtitle_secondary_shadow_offset";
 constexpr const char* PlayerSubtitleSecondaryScale =
     "player/subtitle_secondary_scale";
+// 字幕拖动（拖动开关）：开启后可在播放中按住字幕上下拖动调整位置，松手记忆；
+// 关闭时只能通过字幕设置里的位置滑块调整，防止误触。位置范围与滑块一致
+// （60-100）。
+constexpr const char* PlayerSubtitleDragEnabled =
+    "player/subtitle_drag_enabled";
 constexpr const char* PlayerLastSubtitleDir = "player/last_subtitle_dir";
 
 constexpr const char* PlayerExternalSubtitle = "player/external_subtitle";

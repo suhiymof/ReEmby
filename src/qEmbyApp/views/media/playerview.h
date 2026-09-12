@@ -188,6 +188,11 @@ private:
     void hideRightSidebar(bool immediate = false);
     void setEffectivePlaybackSpeed(double speed);
     void handlePointerActivity(const QPoint &globalPos);
+    // 字幕拖动（B 部分）：按下时命中字幕带进入待定（返回 true）；移动超过
+    // 阈值后由 eventFilter 升级为拖动并实时写位置，松手落配置。
+    bool beginSubtitleDragIfHit(const QPoint &globalPos);
+    void updateSubtitleDrag(const QPoint &globalPos);
+    void finishSubtitleDrag();
     void setCursorHidden(bool hidden);
     bool areControlsFullyVisible() const;
     void setPlayerChromeVisible(bool visible);
@@ -429,6 +434,19 @@ private:
     QPoint m_lastMousePos; 
     bool m_didDrag = false; 
     QTimer *m_singleClickTimer = nullptr; 
+
+    // 字幕拖动（拖动开关开启时可用）：pending = 已按在字幕带内、等待移动
+    // 阈值；active = 正在拖动。targetSecondary 区分拖的是副字幕还是内容主字幕
+    // （决定松手写哪个配置键）；writesSecondaryPos 记录实际写入的 mpv 属性
+    // ——ass-track 弹幕模式下内容主字幕物理上位于 secondary 通道，两者不同。
+    bool m_subtitleDragPending = false;
+    bool m_subtitleDragActive = false;
+    bool m_subtitleDragTargetSecondary = false;
+    bool m_subtitleDragWritesSecondaryPos = false;
+    double m_subtitleDragStartPos = 0.0;
+    double m_subtitleDragLastPos = 0.0;
+    QPoint m_subtitleDragStartGlobalPos;
+    int m_subtitleDragViewHeight = 0;
 
     
     int m_targetAudioStreamIndex = -2;

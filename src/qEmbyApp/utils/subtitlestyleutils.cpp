@@ -146,10 +146,31 @@ void applyToController(MpvController *controller,
         shadowOffset);
     const int secondaryScalePercent = readConfigInt(
         QLatin1String(ConfigKeys::PlayerSubtitleSecondaryScale), scalePercent);
-    const double secondaryDelaySeconds = secondaryDelayMs / 1000.0;
-    const double secondaryOutlinePixels = secondaryOutlineSize / 10.0;
-    const double secondaryShadowPixels = secondaryShadowOffset / 10.0;
-    const double secondaryScaleFactor = secondaryScalePercent / 100.0;
+
+    // ass-track 弹幕模式（protectPrimarySubtitleForDanmaku）下弹幕占用 sid，
+    // secondary 通道承载的其实是内容主字幕——此时 secondary-sub-* 必须使用
+    // 主字幕参数，否则内容字幕会套用副字幕的独立风格与位置；其余场景
+    // secondary 通道才是真正的副字幕，使用副字幕独立参数。
+    const QString effectiveSecondaryFontFamily =
+        protectPrimarySubtitleForDanmaku ? fontFamily : secondaryFontFamily;
+    const int effectiveSecondaryDelayMs =
+        protectPrimarySubtitleForDanmaku ? delayMs : secondaryDelayMs;
+    const int effectiveSecondaryFontSize =
+        protectPrimarySubtitleForDanmaku ? fontSize : secondaryFontSize;
+    const int effectiveSecondaryPosition =
+        protectPrimarySubtitleForDanmaku ? position : secondaryPosition;
+    const int effectiveSecondaryOutlineSize =
+        protectPrimarySubtitleForDanmaku ? outlineSize : secondaryOutlineSize;
+    const int effectiveSecondaryShadowOffset =
+        protectPrimarySubtitleForDanmaku ? shadowOffset : secondaryShadowOffset;
+    const int effectiveSecondaryScalePercent = protectPrimarySubtitleForDanmaku
+                                                   ? scalePercent
+                                                   : secondaryScalePercent;
+
+    const double secondaryDelaySeconds = effectiveSecondaryDelayMs / 1000.0;
+    const double secondaryOutlinePixels = effectiveSecondaryOutlineSize / 10.0;
+    const double secondaryShadowPixels = effectiveSecondaryShadowOffset / 10.0;
+    const double secondaryScaleFactor = effectiveSecondaryScalePercent / 100.0;
 
     controller->setProperty(QStringLiteral("sub-font"), fontFamily);
     controller->setProperty(QStringLiteral("sub-font-size"), fontSize);
@@ -158,9 +179,9 @@ void applyToController(MpvController *controller,
     controller->setProperty(QStringLiteral("sub-shadow-offset"), shadowPixels);
     // 副字幕属性（副字幕未启用/未选择时 secondary-sid 不会被分配，写入无害）。
     controller->setProperty(QStringLiteral("secondary-sub-font"),
-                            secondaryFontFamily);
+                            effectiveSecondaryFontFamily);
     controller->setProperty(QStringLiteral("secondary-sub-font-size"),
-                            secondaryFontSize);
+                            effectiveSecondaryFontSize);
     controller->setProperty(QStringLiteral("secondary-sub-scale"),
                             secondaryScaleFactor);
     controller->setProperty(QStringLiteral("secondary-sub-outline-size"),
@@ -170,7 +191,7 @@ void applyToController(MpvController *controller,
     controller->setProperty(QStringLiteral("secondary-sub-ass-override"),
                             QStringLiteral("force"));
     controller->setProperty(QStringLiteral("secondary-sub-pos"),
-                            secondaryPosition);
+                            effectiveSecondaryPosition);
     controller->setProperty(QStringLiteral("secondary-sub-delay"),
                             secondaryDelaySeconds);
 
@@ -195,8 +216,8 @@ void applyToController(MpvController *controller,
         << "| outline:" << outlinePixels
         << "| shadow:" << shadowPixels
         << "| scale:" << scaleFactor
-        << "| secondaryFontSize:" << secondaryFontSize
-        << "| secondaryPosition:" << secondaryPosition
+        << "| secondaryFontSize:" << effectiveSecondaryFontSize
+        << "| secondaryPosition:" << effectiveSecondaryPosition
         << "| protectDanmakuPrimary:" << protectPrimarySubtitleForDanmaku;
 }
 

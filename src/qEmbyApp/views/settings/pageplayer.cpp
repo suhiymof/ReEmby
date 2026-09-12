@@ -639,6 +639,14 @@ PagePlayer::PagePlayer(QEmbyCore *core, QWidget *parent)
       new ModernSwitch(this), ConfigKeys::PlayerSubtitleSecondaryEnabled, this,
       QVariant(false)));
 
+  m_mainLayout->addWidget(new SettingsCard(
+      ":/svg/dark/home-section-drag.svg", tr("Allow Dragging Subtitles"),
+      tr("Hold a subtitle line in the player and drag vertically to move it. "
+         "Turn off to adjust the position in subtitle settings only, so "
+         "subtitles cannot be moved by accident"),
+      new ModernSwitch(this), ConfigKeys::PlayerSubtitleDragEnabled, this,
+      QVariant(false)));
+
   auto *danmakuTitle = new QLabel(tr("Danmaku"), this);
   danmakuTitle->setObjectName("SettingsSubTitle");
   m_mainLayout->addWidget(danmakuTitle);

@@ -3445,6 +3445,14 @@ bool PlayerView::eventFilter(QObject *watched, QEvent *event)
                 
                 m_dragPos = me->globalPosition().toPoint();
                 m_didDrag = false; 
+
+                // 字幕拖动：按在字幕带内时先进入待定状态，移动超过阈值后由
+                // MouseMove 分支升级为拖动；拖动开关关闭时此处直接返回 false。
+                m_subtitleDragPending = false;
+                if (!isOnHud)
+                {
+                    beginSubtitleDragIfHit(me->globalPosition().toPoint());
+                }
             }
         }
         else if (event->type() == QEvent::MouseMove)
@@ -3464,6 +3472,23 @@ bool PlayerView::eventFilter(QObject *watched, QEvent *event)
 
             if ((me->buttons() & Qt::LeftButton) && watched != m_bottomHUD)
             {
+
+                // 字幕拖动优先于窗口拖动：命中字幕带后等移动阈值，超过阈值
+                // 升级为拖动并实时写位置，不再触发窗口移动。
+                if (m_subtitleDragPending || m_subtitleDragActive)
+                {
+                    if (!m_subtitleDragActive && movedEnough)
+                    {
+                        m_subtitleDragActive = true;
+                        m_didDrag = true; 
+                        m_longPressHandler->stopMouseEdgeLongPress();
+                    }
+                    if (m_subtitleDragActive)
+                    {
+                        updateSubtitleDrag(me->globalPosition().toPoint());
+                    }
+                    return true;
+                }
 
                 
                 if (!window()->isFullScreen())
@@ -3485,6 +3510,16 @@ bool PlayerView::eventFilter(QObject *watched, QEvent *event)
         else if (event->type() == QEvent::MouseButtonRelease)
         {
             auto *me = static_cast<QMouseEvent *>(event);
+            // 字幕拖动收尾：落配置 + 提示，不进入单击暂停（m_didDrag 已置位）。
+            if (m_subtitleDragActive)
+            {
+                m_subtitleDragActive = false;
+                m_subtitleDragPending = false;
+                finishSubtitleDrag();
+                return true;
+            }
+            m_subtitleDragPending = false;
+
             const bool consumedByMouseEdge =
                 me->button() == Qt::LeftButton && m_longPressHandler->stopMouseEdgeLongPress();
             if (consumedByMouseEdge)
@@ -3506,6 +3541,7 @@ bool PlayerView::eventFilter(QObject *watched, QEvent *event)
         else if (event->type() == QEvent::MouseButtonDblClick)
         {
             auto *me = static_cast<QMouseEvent *>(event);
+            m_subtitleDragPending = false;
             if (me->button() == Qt::LeftButton)
             {
                 m_longPressHandler->stopMouseEdgeLongPress();
@@ -3558,6 +3594,150 @@ bool PlayerView::eventFilter(QObject *watched, QEvent *event)
     }
 
     return BaseView::eventFilter(watched, event);
+}
+
+// ---- 字幕拖动（B 部分）-------------------------------------------------
+// 拖动开关开启时，按住字幕附近并上下拖动即可实时调整字幕位置；拖动只改
+// mpv 的 sub-pos / secondary-sub-pos（与字幕设置里的位置滑块同范围 60-100）。
+//
+// 坐标参考系：字幕垂直位置相对视频显示区（dwidth x dheight，居中于
+// MpvWidget）——pos=100 贴视频区底部、pos=0 在顶部，换算
+// y = videoTop + displayH * pos / 100。ass-track 弹幕模式下内容主字幕物理上
+// 位于 secondary 通道（弹幕占用 sid），此时拖动写 secondary-sub-pos。
+
+bool PlayerView::beginSubtitleDragIfHit(const QPoint &globalPos)
+{
+    if (!ConfigStore::instance()->get<bool>(ConfigKeys::PlayerSubtitleDragEnabled,
+                                            false))
+    {
+        return false;
+    }
+    if (!m_mpvWidget || !m_mpvWidget->controller() || !m_danmakuController ||
+        m_mpvWidget->height() <= 0)
+    {
+        return false;
+    }
+
+    // 视频显示尺寸（随窗口缩放）；无效时退化为 widget 尺寸。
+    int displayW = m_mpvWidget->controller()
+                       ->getProperty(QStringLiteral("video-params/dw"))
+                       .toInt();
+    int displayH = m_mpvWidget->controller()
+                       ->getProperty(QStringLiteral("video-params/dh"))
+                       .toInt();
+    if (displayW <= 0 || displayH <= 0)
+    {
+        displayW = m_mpvWidget->width();
+        displayH = m_mpvWidget->height();
+    }
+
+    // ass-track 弹幕模式：弹幕占用 sid，内容主字幕物理上位于 secondary 通道。
+    const bool contentOnSecondaryChannel =
+        m_danmakuController->secondarySubtitleBlockedByDanmaku();
+    const double videoTop = (m_mpvWidget->height() - displayH) / 2.0;
+    const auto referenceY = [videoTop, displayH](double pos) {
+        return videoTop + displayH * (pos / 100.0);
+    };
+    const auto readMpvPos = [this](const char *name) {
+        return m_mpvWidget->controller()
+            ->getProperty(QString::fromLatin1(name))
+            .toDouble();
+    };
+
+    const QPoint localPos = m_mpvWidget->mapFromGlobal(globalPos);
+    const double tolerance = qMax(56.0, displayH / 16.0);
+
+    bool found = false;
+    bool foundTargetSecondary = false;
+    bool foundWritesSecondaryPos = false;
+    double foundPos = 0.0;
+    double bestDistance = tolerance;
+
+    // 候选 1：内容主字幕（已选中时）
+    if (m_danmakuController->selectedSubtitleTrackId() > 0)
+    {
+        const double pos = contentOnSecondaryChannel
+                               ? readMpvPos("secondary-sub-pos")
+                               : readMpvPos("sub-pos");
+        const double distance = qAbs(localPos.y() - referenceY(pos));
+        if (distance < bestDistance)
+        {
+            found = true;
+            foundTargetSecondary = false;
+            foundWritesSecondaryPos = contentOnSecondaryChannel;
+            foundPos = pos;
+            bestDistance = distance;
+        }
+    }
+
+    // 候选 2：副字幕（启用且未被弹幕占轨阻塞时）
+    if (!contentOnSecondaryChannel &&
+        ConfigStore::instance()->get<bool>(
+            ConfigKeys::PlayerSubtitleSecondaryEnabled, false) &&
+        m_danmakuController->secondarySubtitleTrackId() > 0)
+    {
+        const double pos = readMpvPos("secondary-sub-pos");
+        const double distance = qAbs(localPos.y() - referenceY(pos));
+        if (distance < bestDistance)
+        {
+            found = true;
+            foundTargetSecondary = true;
+            foundWritesSecondaryPos = true;
+            foundPos = pos;
+        }
+    }
+
+    if (!found)
+    {
+        return false;
+    }
+
+    m_subtitleDragPending = true;
+    m_subtitleDragTargetSecondary = foundTargetSecondary;
+    m_subtitleDragWritesSecondaryPos = foundWritesSecondaryPos;
+    m_subtitleDragStartPos = foundPos;
+    m_subtitleDragLastPos = foundPos;
+    m_subtitleDragStartGlobalPos = globalPos;
+    m_subtitleDragViewHeight = qMax(1, displayH);
+    return true;
+}
+
+void PlayerView::updateSubtitleDrag(const QPoint &globalPos)
+{
+    if (!m_mpvWidget || !m_mpvWidget->controller())
+    {
+        return;
+    }
+    const int deltaY = globalPos.y() - m_subtitleDragStartGlobalPos.y();
+    double newPos = m_subtitleDragStartPos +
+                    deltaY * 100.0 / qMax(1, m_subtitleDragViewHeight);
+    // 与字幕设置里的位置滑块保持一致的范围（60-100）。
+    newPos = qBound(60.0, newPos, 100.0);
+    if (qFuzzyCompare(newPos, m_subtitleDragLastPos))
+    {
+        return;
+    }
+    m_subtitleDragLastPos = newPos;
+    m_mpvWidget->controller()->setProperty(
+        m_subtitleDragWritesSecondaryPos ? QStringLiteral("secondary-sub-pos")
+                                         : QStringLiteral("sub-pos"),
+        newPos);
+}
+
+void PlayerView::finishSubtitleDrag()
+{
+    const int value = qBound(60, qRound(m_subtitleDragLastPos), 100);
+    const QString key =
+        m_subtitleDragTargetSecondary
+            ? QString::fromLatin1(ConfigKeys::PlayerSubtitleSecondaryPosition)
+            : QString::fromLatin1(ConfigKeys::PlayerSubtitlePosition);
+    // 写入配置后由 valueChanged → applySubtitleStyleSettings 按当前通道场景
+    // 重新应用（与拖动中写入值一致，幂等）；值未变化则不重复写。
+    if (ConfigStore::instance()->get<int>(key, 0) != value)
+    {
+        ConfigStore::instance()->set(key, value);
+    }
+    showToast(tr("Subtitle Position: %1%").arg(value));
 }
 
 void PlayerView::handlePointerActivity(const QPoint &globalPos)

@@ -48,6 +48,8 @@ public:
     // 与主字幕共用同一组轨道列表、独立选择；会记住所选语言，切集后自动恢复。
     void selectSecondarySubtitleTrack(const QVariant &data);
     int secondarySubtitleTrackId() const { return m_secondarySubtitleTrackId; }
+    // 内容主字幕当前选中的轨道 id（-1 = 未选择）。
+    int selectedSubtitleTrackId() const { return m_selectedSubtitleTrackId; }
     // 副字幕是否被当前弹幕渲染方式挤占（弹幕占满 sid + secondary-sid 两条轨）。
     bool secondarySubtitleBlockedByDanmaku() const;
     // 供外部（如副字幕开关变化）触发一次轨道重分配（幂等状态同步）。
