@@ -67,14 +67,6 @@ PagePlayer::PagePlayer(QEmbyCore *core, QWidget *parent)
                        hwCombo, ConfigKeys::PlayerHwDec, this));
 
   
-  auto *voCombo = new ModernComboBox(this);
-  voCombo->addItem(tr("libmpv (Embedded)"), "libmpv");
-  m_mainLayout->addWidget(new SettingsCard(
-      ":/svg/dark/video-output.svg", tr("Video Output Driver"),
-      tr("Rendering backend for embedded player (Render API mode)"), voCombo,
-      ConfigKeys::PlayerVo, this));
-
-  
   auto *vsyncCombo = new ModernComboBox(this);
   vsyncCombo->addItem(tr("Audio"), "audio");
   vsyncCombo->addItem(tr("Display Resample (Default)"), "display-resample");

@@ -44,8 +44,11 @@ int main(int argc, char *argv[]) {
   QApplication a(argc, argv);
   a.setApplicationName(APP_NAME);
   a.setApplicationVersion(APP_VERSION);
-  a.setOrganizationName("AlanHJ");
-  a.setOrganizationDomain("github.com/AlanHJ/qEmby");
+  // 配置 / 缓存 / 日志目录 = %LOCALAPPDATA%/<OrganizationName>/<ApplicationName>
+  // （Windows 上即 AppData\Local\suh\qEmby）。改名后旧目录（AlanHJ\qEmby）不会
+  // 自动迁移，需要手动把 config.ini 等拷到新目录。
+  a.setOrganizationName("suh");
+  a.setOrganizationDomain("github.com/suhiymof/qEmby");
 
   LogManager::instance()->init();
 

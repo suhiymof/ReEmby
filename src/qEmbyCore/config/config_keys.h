@@ -118,7 +118,6 @@ constexpr const char* ImageCacheDuration = "cache/image_cache_duration";
 
 
 constexpr const char* PlayerHwDec = "player/hw_decoding";
-constexpr const char* PlayerVo = "player/video_output";
 constexpr const char* PlayerVideoSync = "player/video_sync";
 constexpr const char* PlayerDefaultScale = "player/default_scale";
 constexpr const char* PlayerAudioLang = "player/audio_lang";

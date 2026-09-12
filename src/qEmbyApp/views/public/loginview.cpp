@@ -410,7 +410,7 @@ void LoginView::setupUi() {
   if (version.isEmpty())
     version = "1.0.0";
   if (orgName.isEmpty())
-    orgName = "AlanHJ";
+    orgName = "suh";
 
   
   auto *footerRow = new QWidget(this);
