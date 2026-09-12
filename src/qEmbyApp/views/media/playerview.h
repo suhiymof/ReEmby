@@ -90,8 +90,11 @@ private slots:
     void showSpeedMenu();
     void showAudioMenu();
     void showSubtitleMenu();
-    // 副字幕选择菜单（第二层）：仅"启用副字幕"全局开关开启时可达。
-    void openSecondarySubtitleMenu();
+    // 二级字幕列表：一级菜单（主字幕/副字幕）悬停或点击后在其右侧弹出轨道
+    // 列表（anchorY 为悬停项在面板内的 y，用于对齐；点击入口传 0）。
+    void showSubtitleTrackSubmenu(bool secondary, int anchorY);
+    void positionSubtitleSubmenu(int anchorY);
+    void closeSubtitleSubmenu();
     void showDanmakuMenu();
     void showDanmakuIdentifyDialog();
     void loadLocalDanmakuFile();
@@ -232,6 +235,11 @@ private:
 
     void showCenteredPopup(QWidget* popup, QPushButton* btn); 
     QWidget* m_activePopup = nullptr; 
+    // 字幕选择二级面板（主/副字幕轨道列表）：随一级弹层一同关闭；QPointer 防止
+    // 底层 widget 被先行销毁时残留悬空指针。IsSecondary 记录当前面板内容归属
+    // （悬停来回划动时可原地复用、只重新对齐位置）。
+    QPointer<QWidget> m_subtitleSubmenu;
+    bool m_subtitleSubmenuIsSecondary = false;
     QPointer<PlayerOverlayDialog> m_activePlayerDialog;
 
     

@@ -106,7 +106,8 @@ ModernScrollPanel::ModernScrollPanel(QWidget *parent) : QFrame(parent), m_maxCon
     m_mainLayout->addWidget(m_scrollArea);
 }
 
-void ModernScrollPanel::addItem(const QString &text, const QVariant &userData, bool isSelected) {
+void ModernScrollPanel::addItem(const QString &text, const QVariant &userData, bool isSelected,
+                                bool hasSubmenu) {
     auto *btn = new QPushButton(m_container);
     btn->setObjectName("modernMenuItemBtn");
 
@@ -134,18 +135,45 @@ void ModernScrollPanel::addItem(const QString &text, const QVariant &userData, b
     btn->setFocusPolicy(Qt::NoFocus);
     btn->setFixedHeight(menuItemHeight(btn->font()));
 
+    // 悬停通知（级联子菜单展开用；WA_Hover 才会产生 HoverEnter 事件）。
+    btn->setAttribute(Qt::WA_Hover, true);
+    btn->installEventFilter(this);
+
     
     QFontMetrics fm(btn->font());
     m_maxContentWidth = qMax(m_maxContentWidth, fm.horizontalAdvance(text));
+    if (hasSubmenu) {
+        // 右侧 "▶" 宽度预留（finalizeLayout 里按此省略主体文本）。
+        m_maxContentWidth =
+            qMax(m_maxContentWidth, fm.horizontalAdvance(text) + 24);
+    }
 
     
-    m_items.append({btn, text});
+    m_items.append({btn, text, userData, hasSubmenu});
 
     connect(btn, &QPushButton::clicked, this, [this, userData, text]() {
         emit itemTriggered(userData, text); 
     });
 
     m_layout->addWidget(btn);
+}
+
+bool ModernScrollPanel::eventFilter(QObject *watched, QEvent *event)
+{
+    // 悬停进入某个菜单项 → 通知外部（展开/收起级联子菜单）。
+    if (event->type() == QEvent::HoverEnter)
+    {
+        for (const MenuItem &item : m_items)
+        {
+            if (item.btn == watched)
+            {
+                const int relativeY = item.btn->mapTo(this, QPoint(0, 0)).y();
+                emit itemHovered(item.userData, relativeY);
+                break;
+            }
+        }
+    }
+    return QFrame::eventFilter(watched, event);
 }
 
 void ModernScrollPanel::finalizeLayout(int maxHeight, int maxWidth) {
@@ -192,9 +220,18 @@ void ModernScrollPanel::finalizeLayout(int maxHeight, int maxWidth) {
     
     for (const auto& item : m_items) {
         QFontMetrics fm(item.btn->font());
-        
-        QString elidedText = fm.elidedText(item.fullText, Qt::ElideRight, textAvailableWidth);
-        item.btn->setText(elidedText);
+        if (item.hasSubmenu) {
+            // 子菜单项：给右侧箭头预留宽度，主体省略后追加 "  ▶"。
+            const QString arrow = QStringLiteral("  ▶");
+            const int arrowWidth = fm.horizontalAdvance(arrow);
+            item.btn->setText(
+                fm.elidedText(item.fullText, Qt::ElideRight,
+                              qMax(20, textAvailableWidth - arrowWidth)) +
+                arrow);
+        } else {
+            QString elidedText = fm.elidedText(item.fullText, Qt::ElideRight, textAvailableWidth);
+            item.btn->setText(elidedText);
+        }
     }
 
     

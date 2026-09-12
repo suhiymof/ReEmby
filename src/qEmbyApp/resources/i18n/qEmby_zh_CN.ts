@@ -9451,6 +9451,10 @@ Address: %2</source>
         <source>Subtitle Position: %1%</source>
         <translation>字幕位置：%1%</translation>
     </message>
+    <message>
+        <source>Primary Subtitle</source>
+        <translation>主字幕</translation>
+    </message>
 </context>
 
 <context>

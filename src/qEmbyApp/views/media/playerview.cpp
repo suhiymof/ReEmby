@@ -696,6 +696,7 @@ void PlayerView::showHudMediaSwitcher()
         m_activePopup->deleteLater();
         m_activePopup = nullptr;
     }
+    closeSubtitleSubmenu();
     closeActivePlayerDialog();
 
     if (m_switcherCacheReady && m_switcherCacheMediaId == m_currentMediaId)
@@ -2065,6 +2066,8 @@ void PlayerView::updateLoadingState()
         m_rightTrigger->raise();
         if (m_activePopup)
             m_activePopup->raise();
+        if (m_subtitleSubmenu)
+            m_subtitleSubmenu->raise();
     }
     else
     {
@@ -2281,7 +2284,7 @@ void PlayerView::showCenteredPopup(QWidget *popup, QPushButton *btn)
         m_activePopup->deleteLater();
         m_activePopup = nullptr;
     }
-
+    closeSubtitleSubmenu();
     m_activePopup = popup;
     connect(popup, &QObject::destroyed, this,
             [this, popup]()
@@ -2555,6 +2558,7 @@ QCoro::Task<void> PlayerView::switchFromMediaSwitcher(QString mediaId, QString t
             m_activePopup->deleteLater();
             m_activePopup = nullptr;
         }
+        closeSubtitleSubmenu();
         co_return;
     }
 
@@ -2635,6 +2639,7 @@ QCoro::Task<void> PlayerView::switchFromMediaSwitcher(QString mediaId, QString t
             m_activePopup->deleteLater();
             m_activePopup = nullptr;
         }
+        closeSubtitleSubmenu();
 
         stopAndReport();
         m_toastLabel->hide();
@@ -2864,6 +2869,7 @@ void PlayerView::stopAndReport()
         m_activePopup->deleteLater();
         m_activePopup = nullptr;
     }
+    closeSubtitleSubmenu();
     closeActivePlayerDialog();
 
     if (!m_currentMediaId.isEmpty() && m_core && m_core->mediaService())
@@ -3022,6 +3028,7 @@ void PlayerView::beginViewTeardown()
         m_activePopup->deleteLater();
         m_activePopup = nullptr;
     }
+    closeSubtitleSubmenu();
     closeActivePlayerDialog();
 
     setCursorHidden(false);
@@ -3267,6 +3274,10 @@ void PlayerView::updateOverlayLayout()
     {
         m_activePopup->raise();
     }
+    if (m_subtitleSubmenu)
+    {
+        m_subtitleSubmenu->raise();
+    }
 
     // standalone：HUD 窗口常显（所有覆盖层都住在里面，见 setStandaloneHudVisible）。
     // 若因任何原因尚未显示而几何已有效，这里兜底补一次 show（幂等、廉价），
@@ -3428,6 +3439,7 @@ bool PlayerView::eventFilter(QObject *watched, QEvent *event)
                     m_activePopup->close();
                     m_activePopup->deleteLater();
                     m_activePopup = nullptr;
+                    closeSubtitleSubmenu();
                     return true;
                 }
             }
@@ -3926,6 +3938,15 @@ void PlayerView::hideControls()
         return;
     }
 
+    // 弹层菜单打开时同样保持 HUD 与弹层可见：用户可能在滚动很长的列表（如
+    // 字幕轨列表），自动隐藏的鼠标判定/时序会把菜单一起关掉（用户实测"滚
+    // 动时弹出菜单消失，需要重新打开"）。
+    if (m_activePopup || m_subtitleSubmenu)
+    {
+        m_hideTimer->start(1000);
+        return;
+    }
+
     if (isAppActive && isMouseInside &&
         (m_topHUD->geometry().contains(localPos) || m_bottomHUD->geometry().contains(localPos) || isMouseInsidePopup ||
          (m_isRightSidebarVisible && m_rightSidebar->geometry().contains(localPos))))
@@ -4362,32 +4383,17 @@ void PlayerView::showAudioMenu()
 void PlayerView::showSubtitleMenu()
 {
     auto *panel = new ModernScrollPanel(this);
-    const QList<QVariantMap> tracks =
-        m_danmakuController ? m_danmakuController->contentSubtitleTracks() : QList<QVariantMap>{};
-    bool anySubSelected = false;
 
-    for (const QVariantMap &map : tracks)
-    {
-        int id = map["id"].toInt();
-        QString title = map["title"].toString();
-        QString lang = map["lang"].toString();
-        bool selected = map["selected"].toBool();
-        if (selected)
-        {
-            anySubSelected = true;
-        }
-
-        QString text = title.isEmpty() ? (lang.isEmpty() ? tr("Subtitle %1").arg(id) : lang) : title;
-        panel->addItem(text, id, selected);
-    }
-
-    panel->addItem(tr("Disable Subtitles"), "no", !anySubSelected);
-    // 副字幕入口：仅"启用副字幕"全局开关开启时显示（播放器设置页）。
+    // 一级菜单只放"主字幕 / 副字幕"两项（悬停/点击后在右侧展开该通道的轨道
+    // 列表），下方保留加载本地字幕与设置入口。轨道列表不平铺在这里——字幕多
+    // 的片源（10+ 条）会把一级菜单拉得很长，滚动查找也不便。
+    panel->addItem(tr("Primary Subtitle"), QStringLiteral("sub_menu_primary"),
+                   false, true);
     if (ConfigStore::instance()->get<bool>(
             ConfigKeys::PlayerSubtitleSecondaryEnabled, false))
     {
-        panel->addItem(tr("Secondary Subtitle..."),
-                       QStringLiteral("secondary_menu"), false);
+        panel->addItem(tr("Secondary Subtitle"),
+                       QStringLiteral("sub_menu_secondary"), false, true);
     }
     panel->addItem(tr("Load Local Subtitle File"), QStringLiteral("load_local"), false);
     panel->addItem(tr("Subtitle Settings"), QStringLiteral("settings"), false);
@@ -4395,10 +4401,32 @@ void PlayerView::showSubtitleMenu()
     int maxHeight = this->height() - m_bottomHUD->height() - 40;
     panel->finalizeLayout(maxHeight < 150 ? 150 : maxHeight, 240);
 
+    // 悬停：展开/切换/收起右侧字幕列表（悬停到普通项时收起）。
+    connect(panel, &ModernScrollPanel::itemHovered, this,
+            [this](const QVariant &data, int anchorY)
+            {
+                const QString action = data.toString();
+                if (action == QLatin1String("sub_menu_primary"))
+                {
+                    showSubtitleTrackSubmenu(false, anchorY);
+                }
+                else if (action == QLatin1String("sub_menu_secondary"))
+                {
+                    showSubtitleTrackSubmenu(true, anchorY);
+                }
+                else
+                {
+                    closeSubtitleSubmenu();
+                }
+            });
+
     connect(panel, &ModernScrollPanel::itemTriggered, this,
             [this](const QVariant &data, const QString &text)
             {
-                auto dismissPopup = [this]()
+                Q_UNUSED(text);
+                const QString action = data.toString();
+
+                auto dismissMenus = [this]()
                 {
                     if (m_activePopup)
                     {
@@ -4407,56 +4435,65 @@ void PlayerView::showSubtitleMenu()
                         m_activePopup->deleteLater();
                         m_activePopup = nullptr;
                     }
+                    closeSubtitleSubmenu();
                 };
 
-                const QString action = data.toString();
-                if (action == QLatin1String("secondary_menu"))
+                if (action == QLatin1String("sub_menu_primary"))
                 {
-                    dismissPopup();
-                    openSecondarySubtitleMenu();
+                    // 点击（而非悬停）也展开二级，方便不习惯悬停操作的方式。
+                    showSubtitleTrackSubmenu(false, 0);
+                    return;
+                }
+                if (action == QLatin1String("sub_menu_secondary"))
+                {
+                    showSubtitleTrackSubmenu(true, 0);
                     return;
                 }
                 if (action == QLatin1String("settings"))
                 {
-                    dismissPopup();
+                    dismissMenus();
                     openSubtitleSettingsDialog();
                     return;
                 }
                 if (action == QLatin1String("load_local"))
                 {
-                    dismissPopup();
+                    dismissMenus();
                     loadExternalSubtitleFile();
                     return;
                 }
-
-                
-                
-                clearPersistedExternalSubtitle();
-
-                if (m_danmakuController)
-                {
-                    m_danmakuController->selectSubtitleTrack(data);
-                }
-
-                showToast(action == "no" ? tr("Subtitles Disabled") : tr("Subtitle: %1").arg(text));
-                dismissPopup();
             });
 
     showCenteredPopup(panel, m_subtitleBtn);
 }
 
-void PlayerView::openSecondarySubtitleMenu()
+// 二级字幕列表：一级菜单里"主字幕/副字幕"悬停或点击后在其右侧弹出该通道的
+// 轨道列表。勾选状态主/副各取各的（contentSubtitleTracks(forSecondary)），
+// 互相独立。选中"关闭字幕/关闭副字幕"或任一轨道后两级菜单一并关闭。
+void PlayerView::showSubtitleTrackSubmenu(bool secondary, int anchorY)
 {
-    if (!m_danmakuController)
+    if (!m_danmakuController || !m_activePopup)
     {
         return;
     }
 
-    auto *panel = new ModernScrollPanel(this);
-    const QList<QVariantMap> tracks =
-        m_danmakuController->contentSubtitleTracks(true);
-    bool anySelected = false;
+    // 内容未变（同为该通道）时只重新对齐位置，避免悬停来回划动反复重建闪烁。
+    if (m_subtitleSubmenu && m_subtitleSubmenuIsSecondary == secondary)
+    {
+        positionSubtitleSubmenu(anchorY);
+        return;
+    }
 
+    closeSubtitleSubmenu();
+
+    // 与一级相同的宿主（内嵌 = 本视图；独立窗口 = 透明 HUD 窗口），保证两者
+    // 坐标系一致（B3：独立窗口下弹层都在 HUD 窗口内）。
+    QWidget *host = m_activePopup->parentWidget() ? m_activePopup->parentWidget()
+                                                  : this;
+    auto *panel = new ModernScrollPanel(host);
+
+    const QList<QVariantMap> tracks =
+        m_danmakuController->contentSubtitleTracks(secondary);
+    bool anySelected = false;
     for (const QVariantMap &map : tracks)
     {
         const int id = map["id"].toInt();
@@ -4468,17 +4505,22 @@ void PlayerView::openSecondarySubtitleMenu()
             anySelected = true;
         }
 
-        const QString text = title.isEmpty() ? (lang.isEmpty() ? tr("Subtitle %1").arg(id) : lang) : title;
+        const QString text = title.isEmpty()
+                                 ? (lang.isEmpty()
+                                        ? tr("Subtitle %1").arg(id)
+                                        : lang)
+                                 : title;
         panel->addItem(text, id, selected);
     }
-
-    panel->addItem(tr("Disable Secondary Subtitle"), QStringLiteral("no"), !anySelected);
+    panel->addItem(secondary ? tr("Disable Secondary Subtitle")
+                             : tr("Disable Subtitles"),
+                   QStringLiteral("no"), !anySelected);
 
     int maxHeight = this->height() - m_bottomHUD->height() - 40;
-    panel->finalizeLayout(maxHeight < 150 ? 150 : maxHeight, 240);
+    panel->finalizeLayout(maxHeight < 150 ? 150 : maxHeight, 280);
 
     connect(panel, &ModernScrollPanel::itemTriggered, this,
-            [this](const QVariant &data, const QString &text)
+            [this, secondary](const QVariant &data, const QString &text)
             {
                 if (m_activePopup)
                 {
@@ -4487,26 +4529,83 @@ void PlayerView::openSecondarySubtitleMenu()
                     m_activePopup->deleteLater();
                     m_activePopup = nullptr;
                 }
+                closeSubtitleSubmenu();
 
-                if (m_danmakuController)
+                if (!m_danmakuController)
                 {
-                    m_danmakuController->selectSecondarySubtitleTrack(data);
+                    return;
                 }
 
-                const bool disabled = data.toString() == QLatin1String("no");
-                showToast(disabled ? tr("Secondary Subtitle Disabled")
-                                   : tr("Secondary Subtitle: %1").arg(text));
-
-                // ass-track 弹幕占用 sid、secondary-sid 又要留给主字幕 —— 两条
-                // 字幕轨已满，副字幕无法显示；给出明确提示。
-                if (!disabled && m_danmakuController &&
-                    m_danmakuController->secondarySubtitleBlockedByDanmaku())
+                if (secondary)
                 {
-                    showToast(tr("Secondary subtitle requires native danmaku rendering"));
+                    m_danmakuController->selectSecondarySubtitleTrack(data);
+                    const bool disabled = data.toString() == QLatin1String("no");
+                    showToast(disabled ? tr("Secondary Subtitle Disabled")
+                                       : tr("Secondary Subtitle: %1").arg(text));
+                    // ass-track 弹幕占用 sid、secondary-sid 又要留给主字幕 ——
+                    // 两条字幕轨已满，副字幕无法显示；给出明确提示。
+                    if (!disabled &&
+                        m_danmakuController->secondarySubtitleBlockedByDanmaku())
+                    {
+                        showToast(tr("Secondary subtitle requires native danmaku rendering"));
+                    }
+                }
+                else
+                {
+                    clearPersistedExternalSubtitle();
+                    m_danmakuController->selectSubtitleTrack(data);
+                    showToast(data.toString() == QLatin1String("no")
+                                  ? tr("Subtitles Disabled")
+                                  : tr("Subtitle: %1").arg(text));
                 }
             });
 
-    showCenteredPopup(panel, m_subtitleBtn);
+    m_subtitleSubmenu = panel;
+    m_subtitleSubmenuIsSecondary = secondary;
+    positionSubtitleSubmenu(anchorY);
+    promoteStandaloneLayer(panel);
+    panel->show();
+    panel->raise();
+}
+
+// 把二级面板对齐到一级面板右侧（悬停项处），并夹取在宿主范围内；右侧放不
+// 下时改放左侧。
+void PlayerView::positionSubtitleSubmenu(int anchorY)
+{
+    if (!m_subtitleSubmenu || !m_activePopup)
+    {
+        return;
+    }
+
+    QWidget *host = m_activePopup->parentWidget() ? m_activePopup->parentWidget()
+                                                  : this;
+    const QPoint mainTopLeft = m_activePopup->pos();
+    const int subW = m_subtitleSubmenu->width();
+    const int subH = m_subtitleSubmenu->height();
+    int x = mainTopLeft.x() + m_activePopup->width() + 4;
+    int y = mainTopLeft.y() + anchorY;
+
+    const int hostW = host->width();
+    const int hostH = host->height();
+    if (x + subW > hostW - 8)
+    {
+        x = qMax(8, mainTopLeft.x() - subW - 4);
+    }
+    if (y + subH > hostH - 8)
+    {
+        y = qMax(8, hostH - 8 - subH);
+    }
+    m_subtitleSubmenu->move(x, y);
+}
+
+void PlayerView::closeSubtitleSubmenu()
+{
+    if (m_subtitleSubmenu)
+    {
+        m_subtitleSubmenu->hide();
+        m_subtitleSubmenu->deleteLater();
+        m_subtitleSubmenu = nullptr;
+    }
 }
 
 void PlayerView::showDanmakuMenu()
@@ -5762,6 +5861,7 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
         m_activePopup->deleteLater();
         m_activePopup = nullptr;
     }
+    closeSubtitleSubmenu();
     closeActivePlayerDialog();
 
     

@@ -340,6 +340,10 @@ QList<QVariantMap> PlayerDanmakuController::contentSubtitleTracks(
         if (isDanmakuTrackMap(trackMap)) {
             continue;
         }
+        // mpv 的 track-list 原始条目自带 selected 字段（当前播放中的轨），与
+        // 菜单里的"用户选择"标记不是一回事——先清除，避免主/副字幕菜单的
+        // 勾选互相混入（例如副字幕菜单里同时出现主字幕轨的勾、或多勾）。
+        trackMap.remove(QStringLiteral("selected"));
         if (selectedTrackId > 0 &&
             trackMap.value(QStringLiteral("id")).toInt() == selectedTrackId) {
             trackMap.insert(QStringLiteral("selected"), true);
