@@ -1862,6 +1862,21 @@ void PlayerView::applyStandaloneOverlay()
         }
     }
 
+    // HUD 窗口是 layered 顶层窗口：Qt 用 UpdateLayeredWindowIndirect 提交整帧，
+    // 而该 API 对脏区零容忍——任何超出窗口边界的重绘请求都会让**整帧更新被
+    // 拒绝**（qemby.log: "UpdateLayeredWindowIndirect failed ... 参数错误"），
+    // 表现为界面停止刷新、Windows hit-test 卡在旧位图（点击无响应、侧边栏
+    // 弹出不灵敏/位置错乱）。
+    // QGraphicsDropShadowEffect 会把 update 区域向外扩展一个 blur 半径：
+    // 侧边栏 y = 32（topHUD 固定高度）− blur 35 = −3，溢出窗口顶部；贴右边缘
+    // 时又向右溢出 35px —— 实测日志脏区恰为 (…, -3)。故 layered 模式下移除
+    // 覆盖层自身的投影 effect（半透明面板本身已有层次感，视觉损失很小）。
+    // 注意：opacity effect（top/bottom HUD、台标、网速）不扩展绘制区域、且被
+    // 成员指针持有（删了后续 setOpacity 会悬空），不能在此删除。
+    if (m_rightSidebar) {
+        m_rightSidebar->setGraphicsEffect(nullptr);
+    }
+
     syncStandaloneHudWindow();
 }
 
@@ -2000,6 +2015,11 @@ void PlayerView::promoteStandaloneLayer(QWidget *layer)
     if (layer->parentWidget() == m_hudWindow) {
         return; // 已迁移（幂等）
     }
+    // 同 applyStandaloneOverlay：layered 窗口下弹层自身的投影 effect 会让脏区
+    // 溢出窗口边界（ModernScrollPanel 的 blur 20 + offset(0,4)，在底部按钮上方
+    // 弹出时可能超出窗口顶部/底部），导致整帧更新被拒绝——表现为点击后弹层
+    // "看不到 / 没反应"。layered 模式下移除（弹层本身无 effect 时是 no-op）。
+    layer->setGraphicsEffect(nullptr);
     const QPoint globalTopLeft = layer->mapToGlobal(QPoint(0, 0));
     const QSize layerSize = layer->size();
     const bool wasHidden = layer->isHidden();
