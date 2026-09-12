@@ -493,6 +493,15 @@ PagePlayer::PagePlayer(QEmbyCore *core, QWidget *parent)
       ConfigKeys::PlayerIndependentWindow, this));
 
   m_mainLayout->addWidget(new SettingsCard(
+      ":/svg/dark/video-output.svg",
+      tr("Auto Independent Window for Dolby Vision"),
+      tr("Automatically play Dolby Vision sources in the independent player "
+         "window. The embedded renderer cannot reproduce Dolby Vision colors "
+         "and shows a green tint"),
+      new ModernSwitch(this), ConfigKeys::PlayerDvAutoIndependentWindow, this,
+      QVariant(true)));
+
+  m_mainLayout->addWidget(new SettingsCard(
       ":/svg/dark/volume-normalize.svg", tr("Volume Normalization"),
       tr("Automatically adjust volume to prevent sudden loud noises"),
       new ModernSwitch(this), ConfigKeys::PlayerVolNormal, this));

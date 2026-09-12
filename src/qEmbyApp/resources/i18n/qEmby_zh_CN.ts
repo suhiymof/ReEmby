@@ -9380,6 +9380,14 @@ Address: %2</source>
         <translation>在播放器中按住字幕上下拖动即可调整位置。关闭后仅能通过字幕设置调整位置，可避免误触移动字幕</translation>
     </message>
     <message>
+        <source>Auto Independent Window for Dolby Vision</source>
+        <translation>杜比视界片源自动使用独立窗口</translation>
+    </message>
+    <message>
+        <source>Automatically play Dolby Vision sources in the independent player window. The embedded renderer cannot reproduce Dolby Vision colors and shows a green tint</source>
+        <translation>播放杜比视界（Dolby Vision）片源时自动改用独立播放窗口。内嵌渲染无法正确还原 DV 色彩空间，画面会发绿</translation>
+    </message>
+    <message>
         <source>Clear</source>
         <translation>清理</translation>
     </message>
