@@ -16,6 +16,14 @@ class DetailActionWidget : public QWidget {
 public:
     explicit DetailActionWidget(QWidget* parent = nullptr);
 
+    // 行动作按钮用 FlowLayout（按宽度换行），高度必须按实际宽度算。
+    // QWidget 的 sizePolicy 默认 hasHeightForWidth()==false，外层布局因此
+    // 只会用构造期的 sizeHint().height()（那时拿不到真实宽度，必然算错行数）
+    // 而不会再问 heightForWidth → 第二行被裁、整行不可见。
+    // 这里显式打开并转发给内部 layout，让外层拿到真实宽度后重新询问高度。
+    bool hasHeightForWidth() const override;
+    int heightForWidth(int width) const override;
+
     void setupNormalMode(const MediaItem& item);
     void setupSeriesMode(const MediaItem& nextUpItem, const QString& epTag);
     void setSeriesLoadingMode();

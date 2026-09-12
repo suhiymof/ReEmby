@@ -123,22 +123,17 @@ QSize FlowLayout::sizeHint() const
         width = geometry().width();
     }
 
-    // 估算行数用的宽度：setup 阶段（widget 尚未布局）所有祖先宽度都还是 0。
-    // 此时若直接跳过 heightForWidth，sizeHint 只剩 minimumSize()（单个 item 的
-    // 最小尺寸）→ 外层 QVBoxLayout 据此分配的高度不足 → 内容被裁至不可见
-    // （详情页行动作按钮整行消失的根因）。
+    // 高度估算：优先用能拿到的真实宽度；setup 阶段（widget 尚未布局、祖先链
+    // 宽度还是 0）拿不到时用一个"偏窄"的兜底宽度，让 heightForWidth 算出偏多
+    // 的行数——宁可多留一行空白，也不能低估导致内容被裁。
     //
-    // 关键：始终用兜底 width 算行数，**不**信任 parentWidget 链——因为祖先链
-    // 上常会"碰巧"找到已显示的祖先（比如主窗口 1920px），让 heightForWidth
-    // 算出"1 行 36px"（所有按钮装一行），QVBoxLayout 据此给 36px 高度，按钮
-    // 36px 高+边距 → 仍被裁。setup 阶段**没有**可信的"真实可用宽度"，必须用
-    // 一个"保证多于 1 行"的窄宽度估算（让 buttons 多换几次行 → 高度偏高估）。
-    // 布局稳定后 hasHeightForWidth()=true，外层带真实宽度重算、收敛。
-    //
-    // 用 400 而非更小：详情页典型文本容器宽 ~600，400 算 2-3 行（80-120px），
-    // 实际需要 2 行 ~72px，偏高估 ~10-50px → 安全空白但不裁切。
+    // 注意：这只是首帧的保底。真正让高度正确的是承载 widget 打开
+    // height-for-width（sizePolicy().setHeightForWidth(true) + 转发
+    // heightForWidth，见 DetailActionWidget），这样布局激活拿到真实宽度后，
+    // 外层会重新询问高度并收敛到准确值。
     constexpr int kFallbackWidthForHeight = 400;
-    size.setHeight(heightForWidth(kFallbackWidthForHeight));
+    const int widthForHeight = (width > 0) ? width : kFallbackWidthForHeight;
+    size.setHeight(heightForWidth(widthForHeight));
 
     if (width > 0) {
         size.setWidth(qMax(size.width(), width));

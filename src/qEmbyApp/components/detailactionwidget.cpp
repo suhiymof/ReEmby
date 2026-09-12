@@ -21,6 +21,17 @@
 #include <services/trakt/traktservice.h>
 
 DetailActionWidget::DetailActionWidget(QWidget *parent) : QWidget(parent) {
+  // 关键：打开 height-for-width。QWidget 的 sizePolicy 默认
+  // hasHeightForWidth()==false，外层 QVBoxLayout 因此只认构造期算出的
+  // sizeHint().height()，永远不会在拿到真实宽度后重新询问高度 —— 行动作
+  // 按钮需要换行时（"继续播放 S01E02" + "重新播放 S01E02" 等），构造期算出的
+  // 单行高度会把第二行裁掉，表现为整行按钮不可见。
+  {
+    QSizePolicy sp = sizePolicy();
+    sp.setHeightForWidth(true);
+    setSizePolicy(sp);
+  }
+
   auto *mainLayout = new QVBoxLayout(this);
   mainLayout->setContentsMargins(0, 0, 0, 0);
   mainLayout->setSpacing(4);
@@ -185,6 +196,22 @@ DetailActionWidget::DetailActionWidget(QWidget *parent) : QWidget(parent) {
           });
 
   clear();
+}
+
+bool DetailActionWidget::hasHeightForWidth() const {
+  // 内部 mainLayout 含 FlowLayout（行动作按钮按宽度换行），其
+  // hasHeightForWidth() 为 true；QWidget 基类实现会转发给 layout，这里显式
+  // 重写只为语义清晰 + 与 sizePolicy().setHeightForWidth(true) 配套。
+  return layout() ? layout()->hasHeightForWidth() : QWidget::hasHeightForWidth();
+}
+
+int DetailActionWidget::heightForWidth(int width) const {
+  // 把真实可用宽度透传给内部 layout（QVBoxLayout → FlowLayout），
+  // FlowLayout 据此算出实际需要的行数与总高度。
+  if (QLayout *lay = layout(); lay && lay->hasHeightForWidth()) {
+    return lay->totalHeightForWidth(width);
+  }
+  return QWidget::heightForWidth(width);
 }
 
 void DetailActionWidget::clear() {
