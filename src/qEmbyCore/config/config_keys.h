@@ -199,6 +199,10 @@ constexpr const char* PlayerSubtitleSecondaryScale =
 // （60-100）。
 constexpr const char* PlayerSubtitleDragEnabled =
     "player/subtitle_drag_enabled";
+// DV（纯 Dolby Vision）片源自动改用独立窗口播放：内嵌走 render API 时 DV 的
+// IPT 色彩空间不被处理（发绿），独立窗口（wid + gpu-next）正常。默认开。
+constexpr const char* PlayerDvAutoIndependentWindow =
+    "player/dv_auto_independent_window";
 constexpr const char* PlayerLastSubtitleDir = "player/last_subtitle_dir";
 
 constexpr const char* PlayerExternalSubtitle = "player/external_subtitle";

@@ -11,6 +11,7 @@
 #include "../../components/playerstatisticsoverlay.h"
 #include "../../components/playersubtitlesettingsdialog.h"
 #include "../../utils/mediaitemutils.h"
+#include "../../utils/dvdetectionutils.h"
 #include "../../utils/mediasourcepreferenceutils.h"
 #include "../../utils/playerpreferenceutils.h"
 #include "../../utils/powerinhibitutils.h"
@@ -91,58 +92,16 @@ constexpr int kStandaloneHudAutoHideDelayMs = 2000;
 // 保守按纯 DV 处理（误伤 hybrid 只多耗 CPU，漏判则发绿不可看）。
 bool sourceNeedsForcedSoftwareDecode(const MediaSourceInfo &source)
 {
-    int videoStreams = 0;
-    QString rangeType, range, codecProfile;
-    bool result = false;
-    for (const MediaStreamInfo &stream : source.mediaStreams)
-    {
-        if (stream.type != QStringLiteral("Video"))
-            continue;
-        if (videoStreams == 0)
-        {
-            rangeType = stream.videoRangeType.trimmed();
-            range = stream.videoRange.trimmed();
-            codecProfile = stream.profile.trimmed();
-        }
-        videoStreams++;
-        const QString type = stream.videoRangeType.trimmed();
-        if (type.compare(QStringLiteral("DOVI"), Qt::CaseInsensitive) == 0)
-        {
-            result = true;
-            break;
-        }
-        if (type.compare(QStringLiteral("DOVIWithHDR10"), Qt::CaseInsensitive) == 0
-            || type.compare(QStringLiteral("DOVIWithSDR"), Qt::CaseInsensitive) == 0
-            || type.compare(QStringLiteral("DOVIWithHLG"), Qt::CaseInsensitive) == 0)
-        {
-            result = false;
-            break;
-        }
-        const QString range = stream.videoRange.trimmed();
-        // Emby 旧字段值是 "DolbyVision"（4.8 实测），新字段才是 "DOVI"。
-        result = range.compare(QStringLiteral("DOVI"), Qt::CaseInsensitive) == 0
-                 || range.compare(QStringLiteral("DolbyVision"), Qt::CaseInsensitive) == 0;
-        break;
-    }
-    qInfo().noquote() << "[PlayerView] DV decode check"
-                      << "| videoStreams:" << videoStreams
-                      << "| videoRangeType:" << (rangeType.isEmpty() ? QStringLiteral("-") : rangeType)
-                      << "| videoRange:" << (range.isEmpty() ? QStringLiteral("-") : range)
-                      << "| profile:" << (codecProfile.isEmpty() ? QStringLiteral("-") : codecProfile)
-                      << "| forceSwDecode:" << result;
-    return result;
+    // 实现在 DvDetectionUtils（供 PlaybackManager 的 DV 自动独立窗口共用）。
+    return DvDetectionUtils::isPureDolbyVision(source);
 }
 
 // 判定数据是否可用：没有任何 Video 流说明 sourceInfo 来自列表 API
 //（不带 MediaStreams），初始 hwdec 决策没有依据，需要拉 detail 复查。
 bool hasVideoStreamData(const MediaSourceInfo &source)
 {
-    for (const MediaStreamInfo &stream : source.mediaStreams)
-    {
-        if (stream.type == QStringLiteral("Video"))
-            return true;
-    }
-    return false;
+    // 实现在 DvDetectionUtils（供 PlaybackManager 的 DV 自动独立窗口共用）。
+    return DvDetectionUtils::hasVideoStreamData(source);
 }
 
 

@@ -7,8 +7,10 @@
 #include <config/configstore.h>
 #include <config/config_keys.h>
 #include <models/media/playbackinfo.h>
+#include <models/media/playerlaunchcontext.h>
 #include "../components/playerwindow.h"
 #include "../components/moderntoast.h"
+#include "../utils/dvdetectionutils.h"
 #include "../utils/logredactionutils.h"
 #include "../utils/playerpreferenceutils.h"
 #include <QProcess>
@@ -86,9 +88,26 @@ void PlaybackManager::startPlayback(const QString& mediaId, const QString& title
         return;
     }
 
-    
-    
-    
+    // DV 自动独立窗口：内嵌走 render API 不处理 DV 的 IPT 色彩（发绿），
+    // 独立窗口的 wid + gpu-next 正常。详情页路径的 extraData 携带完整
+    // MediaStreams，起播前即可判定纯 DV → 直接走独立窗口（无闪切）；
+    // 列表/继续观看路径（无 MediaStreams）→ 内嵌起播 + PlayerView 内异步
+    // 复查后切换（见 dvRecheck）。无数据时 isPureDolbyVision 返回 false，
+    // 自然落到内嵌路径。
+    if (ConfigStore::instance()->get<bool>(ConfigKeys::PlayerDvAutoIndependentWindow, true)) {
+        MediaSourceInfo dvSource;
+        if (extraData.canConvert<PlayerLaunchContext>()) {
+            dvSource = extraData.value<PlayerLaunchContext>().selectedSource;
+        } else if (extraData.canConvert<MediaSourceInfo>()) {
+            dvSource = extraData.value<MediaSourceInfo>();
+        }
+        if (!dvSource.mediaStreams.isEmpty() && DvDetectionUtils::isPureDolbyVision(dvSource)) {
+            qDebug() << "[PlaybackManager] → Mode: Independent window (DV source auto)";
+            launchIndependentWindow(mediaId, title, streamUrl, startPositionTicks, extraData);
+            return;
+        }
+    }
+
     qDebug() << "[PlaybackManager] → Mode: Embedded player";
     Q_EMIT requestEmbeddedPlay(mediaId, title, streamUrl, startPositionTicks, extraData);
 }
