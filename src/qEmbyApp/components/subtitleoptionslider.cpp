@@ -12,8 +12,10 @@
 
 SubtitleOptionSlider::SubtitleOptionSlider(SubtitleOptionUtils::SliderKind kind,
                                            QString configKey,
-                                           QWidget *parent)
-    : QWidget(parent), m_kind(kind), m_configKey(configKey)
+                                           QWidget *parent,
+                                           int fallbackValue)
+    : QWidget(parent), m_kind(kind), m_configKey(configKey),
+      m_fallbackValue(fallbackValue)
 {
     setObjectName("SubtitleOptionSlider");
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
@@ -127,12 +129,19 @@ void SubtitleOptionSlider::syncFromStore()
     const SubtitleOptionUtils::SliderSpec spec =
         SubtitleOptionUtils::sliderSpec(m_kind);
 
-    int resolvedValue = spec.defaultValue;
+    // 配置未设置时的回退：优先用调用方给的 fallback（副字幕借此回退到主字幕
+    // 对应值，保证启用副字幕时初始与主字幕一致），否则用 SliderKind 默认值。
+    const int effectiveDefault =
+        (m_fallbackValue >= 0)
+            ? SubtitleOptionUtils::clampSliderValue(m_kind, m_fallbackValue)
+            : spec.defaultValue;
+
+    int resolvedValue = effectiveDefault;
     if (!m_configKey.trimmed().isEmpty()) {
         const QVariant value = ConfigStore::instance()->get<QVariant>(
-            m_configKey, QVariant(spec.defaultValue));
+            m_configKey, QVariant(effectiveDefault));
         resolvedValue = SubtitleOptionUtils::clampSliderValue(
-            m_kind, variantToInt(value, spec.defaultValue));
+            m_kind, variantToInt(value, effectiveDefault));
     }
 
     setCurrentValue(resolvedValue, false, false);

@@ -34,6 +34,19 @@ QString readSubtitleFontFamily()
             SubtitleOptionUtils::defaultFontFamily()));
 }
 
+// 副字幕字体：未单独设置时跟随主字幕字体。
+QString readSecondarySubtitleFontFamily(const QString &mainFont)
+{
+    return SubtitleOptionUtils::normalizeFontFamily(
+        ConfigStore::instance()->get<QString>(
+            ConfigKeys::PlayerSubtitleSecondaryFont, mainFont));
+}
+
+// 副字幕未单独设置位置时的回退：主字幕位置上移（偏移量见
+// SubtitleOptionUtils::kSecondaryPositionFallbackOffset，数值更小 = 更靠画面
+// 中上部），避免两条字幕叠在同一条线上。位置滑块合法范围为 60-100。
+constexpr int kSecondaryPositionFallbackMin = 60;
+
 } 
 
 bool isSubtitleStyleKey(const QString &key)
@@ -44,7 +57,17 @@ bool isSubtitleStyleKey(const QString &key)
            key == QLatin1String(ConfigKeys::PlayerSubtitlePosition) ||
            key == QLatin1String(ConfigKeys::PlayerSubtitleOutlineSize) ||
            key == QLatin1String(ConfigKeys::PlayerSubtitleShadowOffset) ||
-           key == QLatin1String(ConfigKeys::PlayerSubtitleScale);
+           key == QLatin1String(ConfigKeys::PlayerSubtitleScale) ||
+           key == QLatin1String(ConfigKeys::PlayerSubtitleSecondaryEnabled) ||
+           key == QLatin1String(ConfigKeys::PlayerSubtitleSecondaryFont) ||
+           key == QLatin1String(ConfigKeys::PlayerSubtitleSecondaryDelayMs) ||
+           key == QLatin1String(ConfigKeys::PlayerSubtitleSecondaryFontSize) ||
+           key == QLatin1String(ConfigKeys::PlayerSubtitleSecondaryPosition) ||
+           key ==
+               QLatin1String(ConfigKeys::PlayerSubtitleSecondaryOutlineSize) ||
+           key ==
+               QLatin1String(ConfigKeys::PlayerSubtitleSecondaryShadowOffset) ||
+           key == QLatin1String(ConfigKeys::PlayerSubtitleSecondaryScale);
 }
 
 void applyToController(MpvController *controller,
@@ -103,25 +126,53 @@ void applyToController(MpvController *controller,
     const double shadowPixels = shadowOffset / 10.0;
     const double scaleFactor = scalePercent / 100.0;
 
+    // 副字幕参数：每项都独立读取，未单独设置时回退主字幕对应值；位置额外
+    // 上移 kSecondaryPositionOffset，避免两条字幕叠在同一条线上。
+    const QString secondaryFontFamily =
+        readSecondarySubtitleFontFamily(fontFamily);
+    const int secondaryDelayMs = readConfigInt(
+        QLatin1String(ConfigKeys::PlayerSubtitleSecondaryDelayMs), delayMs);
+    const int secondaryFontSize = readConfigInt(
+        QLatin1String(ConfigKeys::PlayerSubtitleSecondaryFontSize), fontSize);
+    const int secondaryPosition = readConfigInt(
+        QLatin1String(ConfigKeys::PlayerSubtitleSecondaryPosition),
+        qMax(kSecondaryPositionFallbackMin,
+             position - SubtitleOptionUtils::kSecondaryPositionFallbackOffset));
+    const int secondaryOutlineSize = readConfigInt(
+        QLatin1String(ConfigKeys::PlayerSubtitleSecondaryOutlineSize),
+        outlineSize);
+    const int secondaryShadowOffset = readConfigInt(
+        QLatin1String(ConfigKeys::PlayerSubtitleSecondaryShadowOffset),
+        shadowOffset);
+    const int secondaryScalePercent = readConfigInt(
+        QLatin1String(ConfigKeys::PlayerSubtitleSecondaryScale), scalePercent);
+    const double secondaryDelaySeconds = secondaryDelayMs / 1000.0;
+    const double secondaryOutlinePixels = secondaryOutlineSize / 10.0;
+    const double secondaryShadowPixels = secondaryShadowOffset / 10.0;
+    const double secondaryScaleFactor = secondaryScalePercent / 100.0;
+
     controller->setProperty(QStringLiteral("sub-font"), fontFamily);
     controller->setProperty(QStringLiteral("sub-font-size"), fontSize);
     controller->setProperty(QStringLiteral("sub-scale"), scaleFactor);
     controller->setProperty(QStringLiteral("sub-outline-size"), outlinePixels);
     controller->setProperty(QStringLiteral("sub-shadow-offset"), shadowPixels);
-    controller->setProperty(QStringLiteral("secondary-sub-font"), fontFamily);
+    // 副字幕属性（副字幕未启用/未选择时 secondary-sid 不会被分配，写入无害）。
+    controller->setProperty(QStringLiteral("secondary-sub-font"),
+                            secondaryFontFamily);
     controller->setProperty(QStringLiteral("secondary-sub-font-size"),
-                            fontSize);
+                            secondaryFontSize);
     controller->setProperty(QStringLiteral("secondary-sub-scale"),
-                            scaleFactor);
+                            secondaryScaleFactor);
     controller->setProperty(QStringLiteral("secondary-sub-outline-size"),
-                            outlinePixels);
+                            secondaryOutlinePixels);
     controller->setProperty(QStringLiteral("secondary-sub-shadow-offset"),
-                            shadowPixels);
+                            secondaryShadowPixels);
     controller->setProperty(QStringLiteral("secondary-sub-ass-override"),
                             QStringLiteral("force"));
-    controller->setProperty(QStringLiteral("secondary-sub-pos"), position);
+    controller->setProperty(QStringLiteral("secondary-sub-pos"),
+                            secondaryPosition);
     controller->setProperty(QStringLiteral("secondary-sub-delay"),
-                            delaySeconds);
+                            secondaryDelaySeconds);
 
     if (protectPrimarySubtitleForDanmaku) {
         controller->setProperty(QStringLiteral("sub-ass-override"),
@@ -144,6 +195,8 @@ void applyToController(MpvController *controller,
         << "| outline:" << outlinePixels
         << "| shadow:" << shadowPixels
         << "| scale:" << scaleFactor
+        << "| secondaryFontSize:" << secondaryFontSize
+        << "| secondaryPosition:" << secondaryPosition
         << "| protectDanmakuPrimary:" << protectPrimarySubtitleForDanmaku;
 }
 

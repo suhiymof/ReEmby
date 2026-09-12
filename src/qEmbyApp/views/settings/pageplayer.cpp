@@ -627,6 +627,18 @@ PagePlayer::PagePlayer(QEmbyCore *core, QWidget *parent)
             });
   };
 
+  auto *subtitleTitle = new QLabel(tr("Subtitles"), this);
+  subtitleTitle->setObjectName("SettingsSubTitle");
+  m_mainLayout->addWidget(subtitleTitle);
+
+  m_mainLayout->addWidget(new SettingsCard(
+      ":/svg/dark/subtitle-lang.svg", tr("Enable Secondary Subtitle"),
+      tr("Show a second content subtitle track. Adds secondary subtitle "
+         "selection to the player subtitle menu, with its own style options "
+         "in subtitle settings"),
+      new ModernSwitch(this), ConfigKeys::PlayerSubtitleSecondaryEnabled, this,
+      QVariant(false)));
+
   auto *danmakuTitle = new QLabel(tr("Danmaku"), this);
   danmakuTitle->setObjectName("SettingsSubTitle");
   m_mainLayout->addWidget(danmakuTitle);

@@ -41,8 +41,17 @@ public:
     QString activeTargetId() const;
     QString activeEndpointId() const;
 
-    QList<QVariantMap> contentSubtitleTracks() const;
+    // forSecondary = true 时按副字幕选中状态标记 selected（供副字幕菜单使用）。
+    QList<QVariantMap> contentSubtitleTracks(bool forSecondary = false) const;
     void selectSubtitleTrack(const QVariant &data);
+    // 副字幕（第二条内容字幕）：需 PlayerSubtitleSecondaryEnabled 全局开关开启。
+    // 与主字幕共用同一组轨道列表、独立选择；会记住所选语言，切集后自动恢复。
+    void selectSecondarySubtitleTrack(const QVariant &data);
+    int secondarySubtitleTrackId() const { return m_secondarySubtitleTrackId; }
+    // 副字幕是否被当前弹幕渲染方式挤占（弹幕占满 sid + secondary-sid 两条轨）。
+    bool secondarySubtitleBlockedByDanmaku() const;
+    // 供外部（如副字幕开关变化）触发一次轨道重分配（幂等状态同步）。
+    void refreshTrackSelection();
 
     void setDanmakuEnabled(bool enabled);
     void setDanmakuVisible(bool visible);
@@ -60,6 +69,7 @@ private:
     bool isDanmakuTrackMap(const QVariantMap &trackMap) const;
     void onTrackListChanged();
     void syncSubtitleSelectionFromTrackList();
+    void syncSecondarySubtitleSelectionFromTrackList();
     void attachDanmakuTrack();
     void refreshDanmakuTrackId(int remainingRetries = 5);
     void removeDanmakuTrack();
@@ -93,6 +103,10 @@ private:
     int m_commentCount = 0;
     int m_danmakuTrackId = -1;
     int m_selectedSubtitleTrackId = -1;
+    // 副字幕选中轨；m_secondarySubtitleLang 为会话内语言记忆（切集后按语言
+    // 重新匹配恢复副字幕，因为 track id 在切集后会变化）。
+    int m_secondarySubtitleTrackId = -1;
+    QString m_secondarySubtitleLang;
     bool m_fileLoaded = false;
     bool m_visible = true;
     bool m_loading = false;

@@ -40,7 +40,9 @@ QLabel *createAdaptiveIconLabel(QWidget *parent, const QString &iconPath)
     return iconLabel;
 }
 
-ModernComboBox *createSubtitleFontComboBox(QWidget *parent)
+ModernComboBox *createSubtitleFontComboBox(QWidget *parent,
+                                           const QString &configKey,
+                                           const QString &fallbackFont)
 {
     auto *combo = new ModernComboBox(parent);
     combo->setObjectName("playerSubtitleFontCombo");
@@ -58,10 +60,13 @@ ModernComboBox *createSubtitleFontComboBox(QWidget *parent)
         combo->addItem(family, family);
     }
 
+    // 未单独设置时的回退：主字幕用默认字体、副字幕回退主字幕当前字体。
+    const QString resolvedFallback =
+        fallbackFont.isEmpty()
+            ? SubtitleOptionUtils::defaultFontFamily()
+            : SubtitleOptionUtils::normalizeFontFamily(fallbackFont);
     const QString currentFont = SubtitleOptionUtils::normalizeFontFamily(
-        ConfigStore::instance()->get<QString>(
-            ConfigKeys::PlayerSubtitleFont,
-            SubtitleOptionUtils::defaultFontFamily()));
+        ConfigStore::instance()->get<QString>(configKey, resolvedFallback));
     if (combo->findData(currentFont) < 0) {
         combo->addItem(currentFont, currentFont);
     }
@@ -74,14 +79,14 @@ ModernComboBox *createSubtitleFontComboBox(QWidget *parent)
     auto *store = ConfigStore::instance();
     QObject::connect(combo,
                      QOverload<int>::of(&QComboBox::currentIndexChanged), combo,
-                     [combo, store](int index) {
-                         store->set(ConfigKeys::PlayerSubtitleFont,
+                     [combo, store, configKey](int index) {
+                         store->set(configKey,
                                     combo->itemData(index).toString());
                      });
     QObject::connect(store, &ConfigStore::valueChanged, combo,
-                     [combo](const QString &key, const QVariant &newValue) {
-                         if (key != QLatin1String(ConfigKeys::PlayerSubtitleFont) ||
-                             !combo) {
+                     [combo, configKey](const QString &key,
+                                        const QVariant &newValue) {
+                         if (key != configKey || !combo) {
                              return;
                          }
 
@@ -107,8 +112,13 @@ ModernComboBox *createSubtitleFontComboBox(QWidget *parent)
 PlayerSubtitleSettingsDialog::PlayerSubtitleSettingsDialog(QWidget *parent)
     : PlayerOverlayDialog(parent)
 {
+    // 副字幕参数组仅在"启用副字幕"全局开关开启时构建（多出一组参数的高度）。
+    const bool secondaryEnabled = ConfigStore::instance()->get<bool>(
+        ConfigKeys::PlayerSubtitleSecondaryEnabled, false);
+
     setSurfaceObjectName("playerSubtitleSettingsDialog");
-    setSurfacePreferredSize(QSize(620, 456));
+    setSurfacePreferredSize(secondaryEnabled ? QSize(620, 820)
+                                             : QSize(620, 456));
     setTitle(tr("Subtitle Settings"));
 
     contentLayout()->setContentsMargins(16, 8, 16, 16);
@@ -164,8 +174,9 @@ PlayerSubtitleSettingsDialog::PlayerSubtitleSettingsDialog(QWidget *parent)
     auto createSliderTile =
         [this, &createInfoTile](const QString &iconPath, const QString &title,
                                 SubtitleOptionUtils::SliderKind kind,
-                                const QString &configKey) {
-            auto *control = new SubtitleOptionSlider(kind, configKey, this);
+                                const QString &configKey, int fallbackValue = -1) {
+            auto *control =
+                new SubtitleOptionSlider(kind, configKey, this, fallbackValue);
             control->setMinimumWidth(0);
             control->setMaximumWidth(QWIDGETSIZE_MAX);
             control->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
@@ -207,7 +218,8 @@ PlayerSubtitleSettingsDialog::PlayerSubtitleSettingsDialog(QWidget *parent)
 
     fontLayout->addStretch();
 
-    auto *fontCombo = createSubtitleFontComboBox(fontTile);
+    auto *fontCombo = createSubtitleFontComboBox(
+        fontTile, ConfigKeys::PlayerSubtitleFont, QString());
     fontCombo->setToolTip(tr("Choose the font family used for subtitle rendering"));
     fontLayout->addWidget(fontCombo, 0, Qt::AlignVCenter);
     contentLayout()->addWidget(fontTile);
@@ -252,6 +264,135 @@ PlayerSubtitleSettingsDialog::PlayerSubtitleSettingsDialog(QWidget *parent)
                          ConfigKeys::PlayerSubtitleShadowOffset),
         1, 2);
     contentLayout()->addLayout(sliderGrid);
+
+    // ---- 副字幕参数组（仅在"启用副字幕"全局开关开启时构建）----
+    // 与主字幕同一套滑块；每项独立保存，未单独设置时回退主字幕对应值
+    // （位置额外上移，见 SubtitleOptionUtils::kSecondaryPositionFallbackOffset），
+    // 与播放侧 SubtitleStyleUtils 的回退逻辑保持一致。
+    if (secondaryEnabled) {
+        auto *secondaryTitle = new QLabel(tr("Secondary Subtitle"), this);
+        secondaryTitle->setObjectName("playerSubtitleTileTitle");
+        contentLayout()->addWidget(secondaryTitle);
+
+        auto *secondaryFontTile = new QFrame(this);
+        secondaryFontTile->setObjectName("playerSubtitleInlineComboTile");
+        secondaryFontTile->setToolTip(
+            tr("Choose the font family used for the secondary subtitle"));
+        secondaryFontTile->setSizePolicy(QSizePolicy::Expanding,
+                                         QSizePolicy::Fixed);
+
+        auto *secondaryFontLayout = new QHBoxLayout(secondaryFontTile);
+        secondaryFontLayout->setContentsMargins(14, 10, 14, 10);
+        secondaryFontLayout->setSpacing(10);
+
+        secondaryFontLayout->addWidget(
+            createAdaptiveIconLabel(secondaryFontTile,
+                                    ":/svg/dark/subtitle-lang.svg"),
+            0, Qt::AlignVCenter);
+
+        auto *secondaryFontTitleLabel =
+            new QLabel(tr("Secondary Subtitle Font"), secondaryFontTile);
+        secondaryFontTitleLabel->setObjectName("playerSubtitleTileTitle");
+        secondaryFontTitleLabel->setWordWrap(false);
+        secondaryFontTitleLabel->setSizePolicy(QSizePolicy::Preferred,
+                                               QSizePolicy::Fixed);
+        secondaryFontLayout->addWidget(secondaryFontTitleLabel, 0,
+                                       Qt::AlignVCenter);
+
+        secondaryFontLayout->addStretch();
+
+        const QString mainFontForFallback =
+            ConfigStore::instance()->get<QString>(
+                ConfigKeys::PlayerSubtitleFont,
+                SubtitleOptionUtils::defaultFontFamily());
+        auto *secondaryFontCombo = createSubtitleFontComboBox(
+            secondaryFontTile, ConfigKeys::PlayerSubtitleSecondaryFont,
+            mainFontForFallback);
+        secondaryFontCombo->setToolTip(
+            tr("Choose the font family used for the secondary subtitle"));
+        secondaryFontLayout->addWidget(secondaryFontCombo, 0,
+                                       Qt::AlignVCenter);
+        contentLayout()->addWidget(secondaryFontTile);
+
+        // 回退值 = 主字幕当前值（位置额外上移，避免与主字幕重叠）。
+        const auto mainSliderValue =
+            [](const char *key, SubtitleOptionUtils::SliderKind kind) {
+                return ConfigStore::instance()->get<int>(
+                    key,
+                    SubtitleOptionUtils::sliderSpec(kind).defaultValue);
+            };
+        const int mainPosition = SubtitleOptionUtils::clampSliderValue(
+            SubtitleOptionUtils::SliderKind::Position,
+            mainSliderValue(ConfigKeys::PlayerSubtitlePosition,
+                            SubtitleOptionUtils::SliderKind::Position));
+        const int secondaryPositionFallback = qMax(
+            SubtitleOptionUtils::sliderSpec(
+                SubtitleOptionUtils::SliderKind::Position)
+                .minimum,
+            mainPosition -
+                SubtitleOptionUtils::kSecondaryPositionFallbackOffset);
+
+        auto *secondaryGrid = new QGridLayout();
+        secondaryGrid->setContentsMargins(0, 0, 0, 0);
+        secondaryGrid->setHorizontalSpacing(10);
+        secondaryGrid->setVerticalSpacing(10);
+        secondaryGrid->setColumnStretch(0, 1);
+        secondaryGrid->setColumnStretch(1, 1);
+        secondaryGrid->setColumnStretch(2, 1);
+
+        secondaryGrid->addWidget(
+            createSliderTile(
+                ":/svg/dark/danmaku-offset.svg",
+                tr("Secondary Subtitle Timing"),
+                SubtitleOptionUtils::SliderKind::DelayMs,
+                ConfigKeys::PlayerSubtitleSecondaryDelayMs,
+                mainSliderValue(ConfigKeys::PlayerSubtitleDelayMs,
+                                SubtitleOptionUtils::SliderKind::DelayMs)),
+            0, 0);
+        secondaryGrid->addWidget(
+            createSliderTile(
+                ":/svg/dark/danmaku-size.svg", tr("Secondary Subtitle Size"),
+                SubtitleOptionUtils::SliderKind::FontSize,
+                ConfigKeys::PlayerSubtitleSecondaryFontSize,
+                mainSliderValue(ConfigKeys::PlayerSubtitleFontSize,
+                                SubtitleOptionUtils::SliderKind::FontSize)),
+            0, 1);
+        secondaryGrid->addWidget(
+            createSliderTile(
+                ":/svg/dark/player.svg", tr("Secondary Subtitle Position"),
+                SubtitleOptionUtils::SliderKind::Position,
+                ConfigKeys::PlayerSubtitleSecondaryPosition,
+                secondaryPositionFallback),
+            0, 2);
+        secondaryGrid->addWidget(
+            createSliderTile(
+                ":/svg/dark/appearance-font-size.svg",
+                tr("Secondary Subtitle Scale"),
+                SubtitleOptionUtils::SliderKind::ScalePercent,
+                ConfigKeys::PlayerSubtitleSecondaryScale,
+                mainSliderValue(ConfigKeys::PlayerSubtitleScale,
+                                SubtitleOptionUtils::SliderKind::ScalePercent)),
+            1, 0);
+        secondaryGrid->addWidget(
+            createSliderTile(
+                ":/svg/dark/window-player.svg",
+                tr("Secondary Subtitle Outline"),
+                SubtitleOptionUtils::SliderKind::OutlineSize,
+                ConfigKeys::PlayerSubtitleSecondaryOutlineSize,
+                mainSliderValue(ConfigKeys::PlayerSubtitleOutlineSize,
+                                SubtitleOptionUtils::SliderKind::OutlineSize)),
+            1, 1);
+        secondaryGrid->addWidget(
+            createSliderTile(
+                ":/svg/dark/direct-stream.svg",
+                tr("Secondary Subtitle Shadow"),
+                SubtitleOptionUtils::SliderKind::ShadowOffset,
+                ConfigKeys::PlayerSubtitleSecondaryShadowOffset,
+                mainSliderValue(ConfigKeys::PlayerSubtitleShadowOffset,
+                                SubtitleOptionUtils::SliderKind::ShadowOffset)),
+            1, 2);
+        contentLayout()->addLayout(secondaryGrid);
+    }
 
     contentLayout()->addStretch();
 }

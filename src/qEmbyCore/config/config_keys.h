@@ -175,6 +175,25 @@ constexpr const char* PlayerSubtitleOutlineSize =
 constexpr const char* PlayerSubtitleShadowOffset =
     "player/subtitle_shadow_offset";
 constexpr const char* PlayerSubtitleScale = "player/subtitle_scale";
+// 副字幕（第二条内容字幕）。需先启用 PlayerSubtitleSecondaryEnabled 全局开关；
+// 启用后播放器字幕菜单出现副字幕选择、字幕设置对话框出现副字幕参数。副字幕
+// 参数未单独设置时回退到主字幕对应值（位置额外偏移，避免两条字幕重叠）。
+constexpr const char* PlayerSubtitleSecondaryEnabled =
+    "player/subtitle_secondary_enabled";
+constexpr const char* PlayerSubtitleSecondaryFont =
+    "player/subtitle_secondary_font";
+constexpr const char* PlayerSubtitleSecondaryDelayMs =
+    "player/subtitle_secondary_delay_ms";
+constexpr const char* PlayerSubtitleSecondaryFontSize =
+    "player/subtitle_secondary_font_size";
+constexpr const char* PlayerSubtitleSecondaryPosition =
+    "player/subtitle_secondary_position";
+constexpr const char* PlayerSubtitleSecondaryOutlineSize =
+    "player/subtitle_secondary_outline_size";
+constexpr const char* PlayerSubtitleSecondaryShadowOffset =
+    "player/subtitle_secondary_shadow_offset";
+constexpr const char* PlayerSubtitleSecondaryScale =
+    "player/subtitle_secondary_scale";
 constexpr const char* PlayerLastSubtitleDir = "player/last_subtitle_dir";
 
 constexpr const char* PlayerExternalSubtitle = "player/external_subtitle";

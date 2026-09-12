@@ -4202,6 +4202,13 @@ void PlayerView::showSubtitleMenu()
     }
 
     panel->addItem(tr("Disable Subtitles"), "no", !anySubSelected);
+    // 副字幕入口：仅"启用副字幕"全局开关开启时显示（播放器设置页）。
+    if (ConfigStore::instance()->get<bool>(
+            ConfigKeys::PlayerSubtitleSecondaryEnabled, false))
+    {
+        panel->addItem(tr("Secondary Subtitle..."),
+                       QStringLiteral("secondary_menu"), false);
+    }
     panel->addItem(tr("Load Local Subtitle File"), QStringLiteral("load_local"), false);
     panel->addItem(tr("Subtitle Settings"), QStringLiteral("settings"), false);
 
@@ -4223,6 +4230,12 @@ void PlayerView::showSubtitleMenu()
                 };
 
                 const QString action = data.toString();
+                if (action == QLatin1String("secondary_menu"))
+                {
+                    dismissPopup();
+                    openSecondarySubtitleMenu();
+                    return;
+                }
                 if (action == QLatin1String("settings"))
                 {
                     dismissPopup();
@@ -4247,6 +4260,70 @@ void PlayerView::showSubtitleMenu()
 
                 showToast(action == "no" ? tr("Subtitles Disabled") : tr("Subtitle: %1").arg(text));
                 dismissPopup();
+            });
+
+    showCenteredPopup(panel, m_subtitleBtn);
+}
+
+void PlayerView::openSecondarySubtitleMenu()
+{
+    if (!m_danmakuController)
+    {
+        return;
+    }
+
+    auto *panel = new ModernScrollPanel(this);
+    const QList<QVariantMap> tracks =
+        m_danmakuController->contentSubtitleTracks(true);
+    bool anySelected = false;
+
+    for (const QVariantMap &map : tracks)
+    {
+        const int id = map["id"].toInt();
+        const QString title = map["title"].toString();
+        const QString lang = map["lang"].toString();
+        const bool selected = map["selected"].toBool();
+        if (selected)
+        {
+            anySelected = true;
+        }
+
+        const QString text = title.isEmpty() ? (lang.isEmpty() ? tr("Subtitle %1").arg(id) : lang) : title;
+        panel->addItem(text, id, selected);
+    }
+
+    panel->addItem(tr("Disable Secondary Subtitle"), QStringLiteral("no"), !anySelected);
+
+    int maxHeight = this->height() - m_bottomHUD->height() - 40;
+    panel->finalizeLayout(maxHeight < 150 ? 150 : maxHeight, 240);
+
+    connect(panel, &ModernScrollPanel::itemTriggered, this,
+            [this](const QVariant &data, const QString &text)
+            {
+                if (m_activePopup)
+                {
+                    m_activePopup->hide();
+                    m_activePopup->close();
+                    m_activePopup->deleteLater();
+                    m_activePopup = nullptr;
+                }
+
+                if (m_danmakuController)
+                {
+                    m_danmakuController->selectSecondarySubtitleTrack(data);
+                }
+
+                const bool disabled = data.toString() == QLatin1String("no");
+                showToast(disabled ? tr("Secondary Subtitle Disabled")
+                                   : tr("Secondary Subtitle: %1").arg(text));
+
+                // ass-track 弹幕占用 sid、secondary-sid 又要留给主字幕 —— 两条
+                // 字幕轨已满，副字幕无法显示；给出明确提示。
+                if (!disabled && m_danmakuController &&
+                    m_danmakuController->secondarySubtitleBlockedByDanmaku())
+                {
+                    showToast(tr("Secondary subtitle requires native danmaku rendering"));
+                }
             });
 
     showCenteredPopup(panel, m_subtitleBtn);
@@ -4716,6 +4793,13 @@ void PlayerView::applySubtitleStyleSettings()
     const bool protectDanmakuPrimary =
         m_danmakuController && m_danmakuController->isDanmakuEnabled() && m_danmakuController->hasDanmakuTrack();
     SubtitleStyleUtils::applyToController(m_mpvWidget->controller(), protectDanmakuPrimary);
+
+    // 副字幕开关/参数变化时同步轨道分配（幂等）：开启/关闭副字幕、修改副字幕
+    // 参数都能立即生效，无需重载媒体。
+    if (m_danmakuController)
+    {
+        m_danmakuController->refreshTrackSelection();
+    }
 }
 
 void PlayerView::resumePlaybackAfterFinishedSeek()

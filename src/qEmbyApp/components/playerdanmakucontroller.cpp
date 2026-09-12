@@ -152,6 +152,9 @@ void PlayerDanmakuController::setPlaybackContext(const PlayerLaunchContext &cont
     m_activeEndpointId.clear();
     m_commentCount = 0;
     m_selectedSubtitleTrackId = -1;
+    // 副字幕选中轨一并复位；语言记忆 m_secondarySubtitleLang 刻意保留，
+    // 切集后由 syncSecondarySubtitleSelectionFromTrackList 按语言自动恢复。
+    m_secondarySubtitleTrackId = -1;
     m_fileLoaded = false;
     m_visible = true;
     m_loading = false;
@@ -202,6 +205,9 @@ void PlayerDanmakuController::clearPlaybackContext()
     m_activeEndpointId.clear();
     m_commentCount = 0;
     m_selectedSubtitleTrackId = -1;
+    // 副字幕选中轨一并复位；语言记忆 m_secondarySubtitleLang 刻意保留，
+    // 切集后由 syncSecondarySubtitleSelectionFromTrackList 按语言自动恢复。
+    m_secondarySubtitleTrackId = -1;
     m_fileLoaded = false;
     m_visible = true;
     m_loading = false;
@@ -228,6 +234,8 @@ void PlayerDanmakuController::prepareForMediaReload()
     removeDanmakuTrack();
     m_fileLoaded = false;
     m_selectedSubtitleTrackId = -1;
+    // 副字幕轨复位（语言记忆保留，切集后按语言恢复）。
+    m_secondarySubtitleTrackId = -1;
     if (m_nativeDanmakuOverlay) {
         m_nativeDanmakuOverlay->setDanmakuVisible(false);
     }
@@ -311,13 +319,16 @@ QString PlayerDanmakuController::activeEndpointId() const
     return m_activeEndpointId;
 }
 
-QList<QVariantMap> PlayerDanmakuController::contentSubtitleTracks() const
+QList<QVariantMap> PlayerDanmakuController::contentSubtitleTracks(
+    bool forSecondary) const
 {
     QList<QVariantMap> tracks;
     if (!m_mpvWidget || !m_mpvWidget->controller()) {
         return tracks;
     }
 
+    const int selectedTrackId =
+        forSecondary ? m_secondarySubtitleTrackId : m_selectedSubtitleTrackId;
     const QVariantList trackList =
         m_mpvWidget->controller()->getProperty(QStringLiteral("track-list")).toList();
     for (const QVariant &value : trackList) {
@@ -329,8 +340,8 @@ QList<QVariantMap> PlayerDanmakuController::contentSubtitleTracks() const
         if (isDanmakuTrackMap(trackMap)) {
             continue;
         }
-        if (m_selectedSubtitleTrackId > 0 &&
-            trackMap.value(QStringLiteral("id")).toInt() == m_selectedSubtitleTrackId) {
+        if (selectedTrackId > 0 &&
+            trackMap.value(QStringLiteral("id")).toInt() == selectedTrackId) {
             trackMap.insert(QStringLiteral("selected"), true);
         }
         tracks.append(trackMap);
@@ -356,6 +367,52 @@ void PlayerDanmakuController::selectSubtitleTrack(const QVariant &data)
         << "| resolvedTrackId:" << m_selectedSubtitleTrackId;
     applyTrackSelection();
     emit stateChanged();
+}
+
+void PlayerDanmakuController::selectSecondarySubtitleTrack(const QVariant &data)
+{
+    if (!m_mpvWidget || !m_mpvWidget->controller()) {
+        return;
+    }
+
+    const QString valStr = data.toString();
+    if (valStr == QLatin1String("no")) {
+        m_secondarySubtitleTrackId = -1;
+        m_secondarySubtitleLang.clear();
+    } else {
+        m_secondarySubtitleTrackId = data.toInt();
+        // 记住所选轨的语言：切集后 track id 会变化，靠语言重新匹配恢复。
+        m_secondarySubtitleLang.clear();
+        for (const QVariantMap &trackMap : contentSubtitleTracks(true)) {
+            if (trackMap.value(QStringLiteral("id")).toInt() ==
+                m_secondarySubtitleTrackId) {
+                m_secondarySubtitleLang =
+                    trackMap.value(QStringLiteral("lang")).toString();
+                break;
+            }
+        }
+    }
+    qDebug().noquote()
+        << "[Danmaku][Player] Select secondary subtitle track"
+        << "| trackData:" << valStr
+        << "| resolvedTrackId:" << m_secondarySubtitleTrackId
+        << "| lang:" << m_secondarySubtitleLang;
+    applyTrackSelection();
+    emit stateChanged();
+}
+
+bool PlayerDanmakuController::secondarySubtitleBlockedByDanmaku() const
+{
+    // ass-track 弹幕占用 sid，secondary-sid 又要留给主字幕（dualSubtitle 开启
+    // 时），两条字幕轨已满 → 副字幕无法再分配。native-smooth 弹幕走 Qt 层渲染、
+    // 不占 mpv 字幕轨，因此不冲突。
+    return isDanmakuVisible() && m_danmakuTrackId > 0 &&
+           !shouldUseNativeRenderer();
+}
+
+void PlayerDanmakuController::refreshTrackSelection()
+{
+    applyTrackSelection();
 }
 
 void PlayerDanmakuController::setDanmakuEnabled(bool enabled)
@@ -563,8 +620,16 @@ bool PlayerDanmakuController::isDanmakuTrackMap(const QVariantMap &trackMap) con
 void PlayerDanmakuController::onTrackListChanged()
 {
     syncSubtitleSelectionFromTrackList();
+    syncSecondarySubtitleSelectionFromTrackList();
     refreshDanmakuTrackId(0);
-    if ((isDanmakuVisible() && m_danmakuTrackId > 0) || shouldUseNativeRenderer()) {
+    // 副字幕启用且已选中时也要重分配——无弹幕场景不满足原来两个条件，
+    // 否则切集后 secondary-sid 不会被重新写入。
+    const bool secondaryActive =
+        m_secondarySubtitleTrackId > 0 &&
+        ConfigStore::instance()->get<bool>(
+            ConfigKeys::PlayerSubtitleSecondaryEnabled, false);
+    if ((isDanmakuVisible() && m_danmakuTrackId > 0) ||
+        shouldUseNativeRenderer() || secondaryActive) {
         applyTrackSelection();
     }
 }
@@ -587,6 +652,38 @@ void PlayerDanmakuController::syncSubtitleSelectionFromTrackList()
                 m_selectedSubtitleTrackId = previousTrackId;
                 break;
             }
+        }
+    }
+}
+
+void PlayerDanmakuController::syncSecondarySubtitleSelectionFromTrackList()
+{
+    if (m_secondarySubtitleLang.isEmpty()) {
+        return;
+    }
+
+    const QList<QVariantMap> tracks = contentSubtitleTracks(true);
+
+    // 当前选择仍然有效（track id 还在列表里）→ 保持不动，避免覆盖用户的手动选择。
+    for (const QVariantMap &trackMap : tracks) {
+        if (trackMap.value(QStringLiteral("id")).toInt() ==
+            m_secondarySubtitleTrackId) {
+            return;
+        }
+    }
+
+    // 切集后 track id 已失效：按记住的语言重新匹配。
+    m_secondarySubtitleTrackId = -1;
+    for (const QVariantMap &trackMap : tracks) {
+        if (trackMap.value(QStringLiteral("lang")).toString().compare(
+                m_secondarySubtitleLang, Qt::CaseInsensitive) == 0) {
+            m_secondarySubtitleTrackId =
+                trackMap.value(QStringLiteral("id")).toInt();
+            qDebug().noquote()
+                << "[Danmaku][Player] Restore secondary subtitle by lang"
+                << "| lang:" << m_secondarySubtitleLang
+                << "| trackId:" << m_secondarySubtitleTrackId;
+            break;
         }
     }
 }
@@ -827,6 +924,14 @@ void PlayerDanmakuController::applyTrackSelection()
     const bool useNativeRenderer =
         shouldUseNativeRenderer() && isDanmakuVisible();
 
+    // 副字幕（第二条内容字幕）：需全局开关开启且已选中轨道才参与分配。
+    const bool secondaryEnabled = ConfigStore::instance()->get<bool>(
+        ConfigKeys::PlayerSubtitleSecondaryEnabled, false);
+    const int secondaryTrackId =
+        (secondaryEnabled && m_secondarySubtitleTrackId > 0)
+            ? m_secondarySubtitleTrackId
+            : -1;
+
     if (m_nativeDanmakuOverlay) {
         m_nativeDanmakuOverlay->setBottomSubtitleProtected(
             useNativeRenderer && dualSubtitle && m_selectedSubtitleTrackId > 0);
@@ -834,13 +939,21 @@ void PlayerDanmakuController::applyTrackSelection()
     }
 
     if (useNativeRenderer) {
+        // native-smooth 弹幕走 Qt overlay、不占 mpv 字幕轨 → sid 给主字幕、
+        // secondary-sid 给副字幕，实现「主副双字幕 + 弹幕」共存。
         qDebug().noquote()
             << "[Danmaku][Player] Apply native renderer selection"
             << "| contentSubtitleTrackId:" << m_selectedSubtitleTrackId
+            << "| secondarySubtitleTrackId:" << secondaryTrackId
             << "| dualSubtitle:" << dualSubtitle
             << "| commentCount:" << m_commentPayload.size();
-        m_mpvWidget->controller()->setProperty(QStringLiteral("secondary-sid"),
-                                               QStringLiteral("no"));
+        if (secondaryTrackId > 0) {
+            m_mpvWidget->controller()->setProperty(QStringLiteral("secondary-sid"),
+                                                   secondaryTrackId);
+        } else {
+            m_mpvWidget->controller()->setProperty(QStringLiteral("secondary-sid"),
+                                                   QStringLiteral("no"));
+        }
         if (dualSubtitle && m_selectedSubtitleTrackId > 0) {
             m_mpvWidget->controller()->setProperty(QStringLiteral("sid"),
                                                    m_selectedSubtitleTrackId);
@@ -854,11 +967,16 @@ void PlayerDanmakuController::applyTrackSelection()
     }
 
     if (isDanmakuVisible() && m_danmakuTrackId > 0) {
+        // ass-track 弹幕占用 sid（弹幕本身就是一条 ASS 字幕轨），secondary-sid
+        // 留给主字幕；此场景下副字幕无法分配（2 条字幕轨已满），菜单侧在选择
+        // 副字幕时会提示改用 native-smooth 弹幕渲染。
         qDebug().noquote()
             << "[Danmaku][Player] Apply dual subtitle selection"
             << "| danmakuTrackId:" << m_danmakuTrackId
             << "| contentSubtitleTrackId:" << m_selectedSubtitleTrackId
-            << "| dualSubtitle:" << dualSubtitle;
+            << "| secondarySubtitleTrackId:" << secondaryTrackId
+            << "| dualSubtitle:" << dualSubtitle
+            << "| secondaryBlocked:" << (secondaryTrackId > 0);
         m_mpvWidget->controller()->setProperty(QStringLiteral("sid"),
                                                m_danmakuTrackId);
         if (dualSubtitle && m_selectedSubtitleTrackId > 0) {
@@ -875,11 +993,18 @@ void PlayerDanmakuController::applyTrackSelection()
         return;
     }
 
+    // 无弹幕：sid = 主字幕，secondary-sid = 副字幕。
     qDebug().noquote()
         << "[Danmaku][Player] Apply regular subtitle selection"
-        << "| contentSubtitleTrackId:" << m_selectedSubtitleTrackId;
-    m_mpvWidget->controller()->setProperty(QStringLiteral("secondary-sid"),
-                                           QStringLiteral("no"));
+        << "| contentSubtitleTrackId:" << m_selectedSubtitleTrackId
+        << "| secondarySubtitleTrackId:" << secondaryTrackId;
+    if (secondaryTrackId > 0) {
+        m_mpvWidget->controller()->setProperty(QStringLiteral("secondary-sid"),
+                                               secondaryTrackId);
+    } else {
+        m_mpvWidget->controller()->setProperty(QStringLiteral("secondary-sid"),
+                                               QStringLiteral("no"));
+    }
     if (m_selectedSubtitleTrackId > 0) {
         m_mpvWidget->controller()->setProperty(QStringLiteral("sid"),
                                                m_selectedSubtitleTrackId);

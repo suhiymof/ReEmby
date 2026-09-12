@@ -90,6 +90,8 @@ private slots:
     void showSpeedMenu();
     void showAudioMenu();
     void showSubtitleMenu();
+    // 副字幕选择菜单（第二层）：仅"启用副字幕"全局开关开启时可达。
+    void openSecondarySubtitleMenu();
     void showDanmakuMenu();
     void showDanmakuIdentifyDialog();
     void loadLocalDanmakuFile();
