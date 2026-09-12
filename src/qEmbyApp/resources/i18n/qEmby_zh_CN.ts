@@ -272,6 +272,18 @@ Error: </source>
         <source>Cloud Sync (WebDAV)</source>
         <translation>云同步（WebDAV）</translation>
     </message>
+    <message>
+        <source>Test Connection</source>
+        <translation>测试连接</translation>
+    </message>
+    <message>
+        <source>Testing...</source>
+        <translation>测试中...</translation>
+    </message>
+    <message>
+        <source>✗ %1</source>
+        <translation>✗ %1</translation>
+    </message>
 </context>
 
 <context>
@@ -371,6 +383,10 @@ Error: </source>
     <message>
         <source>Server Management</source>
         <translation>服务器管理</translation>
+    </message>
+    <message>
+        <source>Failed to connect to %1</source>
+        <translation>无法连接到 %1</translation>
     </message>
 </context>
 
@@ -9363,6 +9379,30 @@ Address: %2</source>
         <source>Hold a subtitle line in the player and drag vertically to move it. Turn off to adjust the position in subtitle settings only, so subtitles cannot be moved by accident</source>
         <translation>在播放器中按住字幕上下拖动即可调整位置。关闭后仅能通过字幕设置调整位置，可避免误触移动字幕</translation>
     </message>
+    <message>
+        <source>Clear</source>
+        <translation>清理</translation>
+    </message>
+    <message>
+        <source>6 Hours</source>
+        <translation>6 小时</translation>
+    </message>
+    <message>
+        <source>12 Hours</source>
+        <translation>12 小时</translation>
+    </message>
+    <message>
+        <source>1 Day</source>
+        <translation>1 天</translation>
+    </message>
+    <message>
+        <source>3 Days</source>
+        <translation>3 天</translation>
+    </message>
+    <message>
+        <source>7 Days</source>
+        <translation>7 天</translation>
+    </message>
 </context>
 
 <context>
@@ -9454,6 +9494,10 @@ Address: %2</source>
     <message>
         <source>Primary Subtitle</source>
         <translation>主字幕</translation>
+    </message>
+    <message>
+        <source>Secondary Subtitle</source>
+        <translation>副字幕</translation>
     </message>
 </context>
 
