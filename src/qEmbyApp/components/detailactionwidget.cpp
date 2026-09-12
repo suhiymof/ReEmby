@@ -39,11 +39,20 @@ DetailActionWidget::DetailActionWidget(QWidget *parent) : QWidget(parent) {
   
   // 用 FlowLayout 让行动作按钮按父宽度自动换行：详情页在"继续播放 S01E1 /
   // 重新播放 S01E1"两个长按钮出现时，QHBoxLayout 不换行会把后面的外置播放器
-  // 按钮挤出可见区（用户两次截图确认）。此前 FlowLayout 因 setup 阶段拿不到
-  // 父宽度、sizeHint 只返回 minimumSize 导致整行被裁不可见——已在
-  // FlowLayout::sizeHint 加兜底宽度修复。setMinimumHeight 仅作一行高度的下限
-  // 保护（不限制换行后的更高需求）。
-  auto *actionsLayout = new FlowLayout(this, 0, 12, 6);
+  // 按钮挤出可见区（用户截图确认）。
+  //
+  // **构造时不要传 this**（这是行动作按钮整行错乱的真根因）：QLayout(QWidget*)
+  // 构造函数会执行 parent->setLayout(this)，而本 widget 已有 mainLayout →
+  // setLayout 失败（qWarning "already has a layout"）；同时 QObject parent 已被
+  // 设为 this，导致随后 mainLayout->addLayout() 里的 addChildLayout() 因
+  // "childLayout->parent() 非空"而 qWarning（"already has a parent"）后直接
+  // return。两头都失败 → FlowLayout 成为孤儿：既不是顶层布局、也没挂进
+  // mainLayout，setGeometry() 永不执行，按钮 geometry 从未被设置 → 全部堆在
+  // 默认位置互相重叠（用户截图中按钮与 streamSelectors 行挤压重叠）。
+  // 正确用法：无 parent 构造，交给 mainLayout->addLayout() 收养（与项目内其它
+  // 7 处 FlowLayout 一致：要么传专用容器 widget，要么不传）。
+  // setMinimumHeight 仅作一行高度的下限保护（不限制换行后的更高需求）。
+  auto *actionsLayout = new FlowLayout(0, 12, 6);
   setMinimumHeight(40);
 
   m_resumeBtn = new QPushButton(tr("▶ Resume"), this);
