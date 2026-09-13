@@ -1,5 +1,6 @@
 #include "apiclient.h"
 
+#include <QCoreApplication>
 #include <QSysInfo>
 #include <utility>
 
@@ -37,9 +38,11 @@ QMap<QString, QString> ApiClient::getAuthHeaders() const {
         return headers;
     }
 
-    QString auth = QString("MediaBrowser Client=\"ReEmby\", Device=\"Desktop\", "
-                           "DeviceId=\"%1\", Version=\"0.1\"")
-                       .arg(m_profile.deviceId);
+    QString auth = QString("MediaBrowser Client=\"ReEmby\", Device=\"%1\", "
+                           "DeviceId=\"%2\", Version=\"%3\"")
+                       .arg(QSysInfo::machineHostName(),
+                            m_profile.deviceId,
+                            QCoreApplication::applicationVersion());
 
     if (!m_profile.accessToken.isEmpty()) {
         auth += QString(", Token=\"%1\"").arg(m_profile.accessToken);

@@ -72,13 +72,12 @@ struct ServerProfile {
 
     bool isValid() const { return !accessToken.isEmpty(); }
 
-    // Built-in default client identity: a widely used third-party player.
-    // Qt's implicit default varies by network backend and libmpv announces
-    // itself as "libmpv", which some servers treat as unknown clients.
-    static QString defaultUserAgent() {
-        return QStringLiteral(
-            "RodelPlayer/2.2607.7.0 (Windows NT 10.0.26100; x64)");
-    }
+    // Built-in default client identity: ReEmby's own name and version
+    // (implementation in serverprofile.cpp). Older builds masqueraded as a
+    // third-party player ("RodelPlayer/...", i.e. 小幻影视) because some
+    // servers run strict UA whitelists; that masquerade is removed so Emby
+    // dashboards and logs show a genuine "ReEmby/<version>" identity.
+    static QString defaultUserAgent();
 
     // Resolution order: per-server customUserAgent -> global
     // ConfigKeys::CustomUserAgent -> built-in default.

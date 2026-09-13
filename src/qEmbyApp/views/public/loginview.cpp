@@ -591,15 +591,17 @@ void LoginView::setupAddPage() {
 
   layout->addWidget(m_passwordInput);
 
-  // Custom User-Agent (optional): servers with strict UA whitelists hang
-  // connections from unrecognized clients. Leave empty to keep defaults.
+  // Custom User-Agent 输入框已隐藏：客户端身份固定为 ReEmby 原生
+  // （ServerProfile::defaultUserAgent），不再提供伪装入口。控件仍构造并参与
+  // 读取（值恒为空 = 无 per-server UA），将来如需恢复删除 setVisible(false)。
   m_userAgentInput = new QLineEdit(this);
   m_userAgentInput->setPlaceholderText(
       tr("Custom User-Agent (optional, for strict servers)"));
   m_userAgentInput->setToolTip(tr(
       "Present this User-Agent to this server for API and streaming "
       "requests. Useful when the server only allows specific players, "
-      "e.g. \"RodelPlayer/2.2607.7.0 (Windows NT 10.0.26100; x64)\""));
+      "e.g. \"ReEmby/0.10.1 (Windows NT 10.0.26100; x64)\""));
+  m_userAgentInput->setVisible(false);
   connect(m_userAgentInput, &QLineEdit::returnPressed, this,
           &LoginView::onLoginClicked);
   layout->addWidget(m_userAgentInput);
