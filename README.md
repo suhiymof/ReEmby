@@ -239,7 +239,6 @@ Grab the latest build from the [Releases](https://github.com/suhiymof/ReEmby/rel
 - 📝 **Secondary subtitle support** — separate track / position / scale / delay, shown alongside the primary subtitle and danmaku
 - 🖥️ **Translucent HUD overlay for the independent window** — playback controls, danmaku and subtitle menus behave the same as embedded, without covering the video
 - 📦 **Portable data directory** — data lives in a `config` folder next to the executable (previously under the system AppData directory)
-- 🌐 **Genuine ReEmby client identity** — no more masquerading as a third-party player UA; servers list the client as `ReEmby`
 - 🔧 Many fixes and polish since upstream: subtitle track selection sync, danmaku rendering and menus, memory/logging, translation completeness
 
 ## ✨ Features
