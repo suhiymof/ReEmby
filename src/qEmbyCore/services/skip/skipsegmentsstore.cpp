@@ -189,7 +189,8 @@ void SkipSegmentsStore::setSeriesEntry(const QString &seriesId,
 void SkipSegmentsStore::clearSeriesEntry(const QString &seriesId)
 {
     ensureLoaded();
-    if (m_series.remove(seriesId) > 0)
+    // Qt6：QHash::remove 返回 bool（是否移除过），不要与 0 比较。
+    if (m_series.remove(seriesId))
     {
         save();
     }
@@ -230,7 +231,8 @@ void SkipSegmentsStore::setItemEntry(const QString &itemId,
 void SkipSegmentsStore::clearItemEntry(const QString &itemId)
 {
     ensureLoaded();
-    if (m_items.remove(itemId) > 0)
+    // Qt6：QHash::remove 返回 bool（是否移除过），不要与 0 比较。
+    if (m_items.remove(itemId))
     {
         save();
     }

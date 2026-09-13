@@ -61,10 +61,12 @@ private:
     void ensureLoaded() const;
     void save();
 
+    // 延迟加载缓存：查询入口都是 const 方法（resolve/global/...），故全部
+    // 数据成员标 mutable（MSVC 下 const 方法里写非 mutable 成员 = C2678）。
     mutable bool m_loaded = false;
-    Lengths m_global;
-    QHash<QString, Lengths> m_series;
-    QHash<QString, Lengths> m_items;
+    mutable Lengths m_global;
+    mutable QHash<QString, Lengths> m_series;
+    mutable QHash<QString, Lengths> m_items;
 };
 
 #endif // SKIPSEGMENTSSTORE_H
