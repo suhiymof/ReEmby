@@ -57,6 +57,9 @@ public:
 
     
     void set(const QString& key, const QVariant& value);
+    // 移除一个键（内存缓存 + 磁盘存储）。用于清理已失效的配置，
+    // 例如已删除服务器遗留的 per-server 设置。
+    void remove(const QString& key);
     void sync();
     QString filePath() const;
     QStringList allKeys() const;

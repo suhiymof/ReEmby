@@ -36,11 +36,10 @@ void ServerManager::removeServer(const QString& id) {
             
             m_servers.removeAt(i);
 
-            // 清理该服务器残留的 per-server 配置：聚合参与开关
-            // （"参与聚合的服务"设置；ConfigStore 无删除 API，写 false
-            // 与清理等效——删除的服务器不再参与聚合）。
-            ConfigStore::instance()->set(
-                ConfigKeys::forServer(id, ConfigKeys::AggregateEnabled), false);
+            // 清理该服务器残留的 per-server 配置（"参与聚合的服务"开关）：
+            // 服务器已删除，其设置不再保留。
+            ConfigStore::instance()->remove(
+                ConfigKeys::forServer(id, ConfigKeys::AggregateEnabled));
 
             
             saveSettings();

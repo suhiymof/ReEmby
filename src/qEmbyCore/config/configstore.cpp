@@ -168,6 +168,31 @@ void ConfigStore::set(const QString& key, const QVariant& value) {
     emit valueChanged(key, value);
 }
 
+void ConfigStore::remove(const QString& key) {
+    const QString storageKey = canonicalStorageKey(key);
+    m_mutex.lock();
+
+    
+    const bool hadValue = m_cache.contains(key) || m_cache.contains(storageKey) ||
+                          m_settings->contains(storageKey);
+
+    m_cache.remove(key);
+    m_cache.remove(storageKey);
+    m_settings->remove(storageKey);
+    m_settings->sync();
+    if (m_settings->status() != QSettings::NoError) {
+        qWarning() << "ConfigStore: failed to sync config"
+                   << m_settings->fileName() << "| status:" << m_settings->status();
+    }
+
+    m_mutex.unlock();
+
+    
+    if (hadValue) {
+        emit valueChanged(key, QVariant());
+    }
+}
+
 bool ConfigStore::has(const QString& key) const {
     QMutexLocker locker(&m_mutex);
     const QString storageKey = canonicalStorageKey(key);
