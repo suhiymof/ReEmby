@@ -101,6 +101,7 @@ private slots:
     void loadExternalSubtitleFile();
     void openSubtitleSettingsDialog();
     void openDanmakuSettingsDialog();
+    void openSkipSettingsDialog();
     void showSettingsMenu(); 
     
     void cycleVideoScale();
@@ -232,6 +233,9 @@ private:
     void updatePowerInhibition();
     QCoro::Task<void> requestIntroDBSegments();
     void checkAndSkipSegment(double position);
+    // 解析手动跳过设置（按剧/按条目覆盖 > 全局默认），结果写入
+    // m_manualIntroSec / m_manualOutroSec；播放开始与设置保存后调用。
+    void refreshManualSkipSettings();
 
     void showCenteredPopup(QWidget* popup, QPushButton* btn); 
     QWidget* m_activePopup = nullptr; 
@@ -405,6 +409,10 @@ private:
     bool m_introSkipped = false;
     bool m_outroSkipped = false;
     bool m_segmentsRequested = false;
+
+    // 手动跳过时长（秒，0 = 不跳过该项）；手动设置优先于 IntroDB 数据。
+    int m_manualIntroSec = 0;
+    int m_manualOutroSec = 0;
 
     
     QString m_switcherCacheMediaId;

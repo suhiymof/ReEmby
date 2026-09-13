@@ -1507,6 +1507,38 @@ QWidget#playerSubtitleSettingsScrollContent {
     qproperty-activeHandleRadius: 8;
 }
 
+/* ============ 片头片尾设置对话框（SkipSettingsDialog） ============ */
+#skipSettingsDialog QLabel#skipSettingsSectionTitle {
+    color: #1E293B;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+
+#skipSettingsDialog QLabel#skipSettingsValue {
+    color: #2563EB;
+    font-size: 15px;
+    font-weight: 700;
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+
+#skipSettingsDialog QLabel#skipSettingsHint {
+    color: #64748B;
+    font-size: 12px;
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+
+#skipSettingsDialog ModernSlider {
+    qproperty-themeColor: #3B82F6;
+    qproperty-trackColor: rgba(148, 163, 184, 0.32);
+    qproperty-bufferColor: rgba(59, 130, 246, 0.16);
+    qproperty-handleColor: #FFFFFF;
+    qproperty-normalTrackHeight: 5;
+    qproperty-hoverTrackHeight: 7;
+    qproperty-normalHandleRadius: 6;
+    qproperty-activeHandleRadius: 8;
+}
+
 #playerSubtitleSettingsDialog ModernComboBox#playerSubtitleFontCombo {
     background-color: #FFFFFF;
     border: 1px solid #CBD5E1;

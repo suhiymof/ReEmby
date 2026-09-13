@@ -2,6 +2,7 @@
 #include "../../components/danmakuserverdialog.h"
 #include "../../components/danmakuoptionslider.h"
 #include "../../components/moderncombobox.h"
+#include "../../components/modernnumberinput.h"
 #include "../../components/modernswitch.h"
 #include "../../components/moderntaginput.h"
 #include "../../components/moderntoast.h"
@@ -14,6 +15,7 @@
 #include "../../managers/thememanager.h"
 #include "config/config_keys.h"
 #include "config/configstore.h"
+#include "services/skip/skipsegmentsstore.h"
 #include "services/danmaku/danmakuservice.h"
 #include "services/danmaku/danmakusettings.h"
 #include "services/manager/servermanager.h"
@@ -488,6 +490,50 @@ PagePlayer::PagePlayer(QEmbyCore *core, QWidget *parent)
       QVariant(false)));
 
   
+  // 全局默认跳过时长：某剧未单独设置时使用；按剧覆盖可在播放器的设置菜单
+  // （片头片尾跳过）中调整；0 = 不跳过该项。
+  {
+    auto *durationsWidget = new QWidget(this);
+    auto *durationsLayout = new QHBoxLayout(durationsWidget);
+    durationsLayout->setContentsMargins(0, 0, 0, 0);
+    durationsLayout->setSpacing(10);
+
+    auto *store = SkipSegmentsStore::instance();
+    const SkipSegmentsStore::Lengths globalDefaults = store->global();
+
+    auto *introLabel = new QLabel(tr("Intro"), durationsWidget);
+    auto *introInput = new ModernNumberInput(durationsWidget);
+    introInput->setRange(0, 600);
+    introInput->setValue(qBound(0, globalDefaults.introSec, 600));
+
+    auto *outroLabel = new QLabel(tr("Outro"), durationsWidget);
+    auto *outroInput = new ModernNumberInput(durationsWidget);
+    outroInput->setRange(0, 600);
+    outroInput->setValue(qBound(0, globalDefaults.outroSec, 600));
+
+    durationsLayout->addWidget(introLabel);
+    durationsLayout->addWidget(introInput);
+    durationsLayout->addSpacing(4);
+    durationsLayout->addWidget(outroLabel);
+    durationsLayout->addWidget(outroInput);
+    durationsLayout->addStretch();
+
+    const auto persistGlobalDurations = [store, introInput, outroInput]() {
+      store->setGlobal({introInput->value(), outroInput->value()});
+    };
+    connect(introInput, qOverload<int>(&QSpinBox::valueChanged), this,
+            [persistGlobalDurations](int) { persistGlobalDurations(); });
+    connect(outroInput, qOverload<int>(&QSpinBox::valueChanged), this,
+            [persistGlobalDurations](int) { persistGlobalDurations(); });
+
+    m_mainLayout->addWidget(new SettingsCard(
+        ":/svg/dark/skip-intro.svg", tr("Default Skip Durations"),
+        tr("Used when a series has no per-series override (adjust per series "
+           "from the player's Settings menu). In seconds; 0 disables "
+           "skipping."),
+        durationsWidget, QString(), this));
+  }
+
   m_mainLayout->addWidget(new SettingsCard(
       ":/svg/dark/window-pop.svg", tr("Independent Player Window"),
       tr("Open video in a separate detached window"), new ModernSwitch(this),

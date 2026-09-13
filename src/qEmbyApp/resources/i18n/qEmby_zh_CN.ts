@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
 <TS version="2.1" language="zh_CN">
 
@@ -2112,6 +2112,10 @@ Continue from there?</source>
         <translation>Trakt 进度：%1（%2）
 是否从该位置继续？</translation>
     </message>
+    <message>
+        <source>Skip Intro / Outro</source>
+        <translation>片头片尾跳过</translation>
+    </message>
 </context>
 
 <context>
@@ -3825,6 +3829,22 @@ This action cannot be undone.</source>
     <message>
         <source>Automatically skip the ending credits during playback</source>
         <translation>播放时自动跳过片尾演职员表</translation>
+    </message>
+    <message>
+        <source>Default Skip Durations</source>
+        <translation>默认跳过时长</translation>
+    </message>
+    <message>
+        <source>Used when a series has no per-series override (adjust per series from the player's Settings menu). In seconds; 0 disables skipping.</source>
+        <translation>当剧集未单独覆盖时使用（可在播放器设置菜单中按剧调整）。单位：秒；0 表示不跳过。</translation>
+    </message>
+    <message>
+        <source>Intro</source>
+        <translation>片头</translation>
+    </message>
+    <message>
+        <source>Outro</source>
+        <translation>片尾</translation>
     </message>
 </context>
 <context>
@@ -10431,6 +10451,49 @@ This cannot be undone.</source>
     <message>
         <source>BiliBili</source>
         <translation>B站</translation>
+    </message>
+</context>
+<context>
+    <name>SkipSettingsDialog</name>
+    <message>
+        <source>Skip Intro &amp; Outro</source>
+        <translation>片头片尾跳过</translation>
+    </message>
+    <message>
+        <source>Use Current</source>
+        <translation>用当前位置</translation>
+    </message>
+    <message>
+        <source>Intro Length</source>
+        <translation>片头时长</translation>
+    </message>
+    <message>
+        <source>Outro Length</source>
+        <translation>片尾时长</translation>
+    </message>
+    <message>
+        <source>Applied to the current video. Set 0 to disable skipping.</source>
+        <translation>应用于当前影片。设为 0 表示不跳过。</translation>
+    </message>
+    <message>
+        <source>Applied to all episodes of "%1". Set 0 to disable skipping.</source>
+        <translation>应用于《%1》的全部剧集。设为 0 表示不跳过。</translation>
+    </message>
+    <message>
+        <source>Global default — intro %1 s · outro %2 s</source>
+        <translation>全局默认 — 片头 %1 秒 · 片尾 %2 秒</translation>
+    </message>
+    <message>
+        <source>Restore Default</source>
+        <translation>恢复默认</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>取消</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>保存</translation>
     </message>
 </context>
 </TS>

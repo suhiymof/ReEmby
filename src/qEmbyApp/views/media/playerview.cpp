@@ -10,6 +10,7 @@
 #include "../../components/playerosdlayer.h"
 #include "../../components/playerstatisticsoverlay.h"
 #include "../../components/playersubtitlesettingsdialog.h"
+#include "../../components/skipsettingsdialog.h"
 #include "../../utils/mediaitemutils.h"
 #include "../../utils/dvdetectionutils.h"
 #include "../../utils/mediasourcepreferenceutils.h"
@@ -56,6 +57,7 @@
 #include <cmath>
 #include <config/config_keys.h>
 #include <config/configstore.h>
+#include <services/skip/skipsegmentsstore.h>
 #include <initializer_list>
 #include <models/media/playbackinfo.h>
 #include <models/media/playerlaunchcontext.h>
@@ -967,10 +969,24 @@ QCoro::Task<void> PlayerView::autoPlayNextMediaIfEnabled()
 
     if (!hasTarget)
     {
-        qInfo().noquote() << "[PlayerView] Continuous playback has no next item"
+        qInfo().noquote() << "[PlayerView] Continuous playback has no next item; finishing playback"
                           << "| mediaId:" << finishedMediaId
                           << "| seriesMode:" << finishedSeriesMode;
         guard->m_autoPlayAdvanceInProgress = false;
+        // 没有下一集（最后一集 / 单集 / 电影）：停止播放并离开播放器——
+        // 内嵌形态回到详情界面，独立窗口形态由 navigateBack 接收者关闭窗口。
+        // 用 0ms 延迟脱离当前 EOF 信号链，避免在 mpv 属性回调里同步 teardown。
+        if (guard)
+        {
+            QPointer<PlayerView> leaveGuard(guard);
+            QTimer::singleShot(0, guard.data(), [leaveGuard]()
+                               {
+                                   if (leaveGuard && !leaveGuard->m_isViewTearingDown)
+                                   {
+                                       leaveGuard->onBackClicked();
+                                   }
+                               });
+        }
         co_return;
     }
 
@@ -1085,11 +1101,32 @@ QCoro::Task<void> PlayerView::requestIntroDBSegments()
 
 void PlayerView::checkAndSkipSegment(double position)
 {
-    if (!m_episodeSegments.fetched || m_episodeSegments.notFound)
-        return;
-
     const bool skipIntro = ConfigStore::instance()->get<bool>(ConfigKeys::PlayerSkipIntro, false);
     const bool skipOutro = ConfigStore::instance()->get<bool>(ConfigKeys::PlayerSkipOutro, false);
+
+    // ① 手动设置优先（用户在播放器里为该剧/该片手动设定的时长）。
+    if (skipIntro && !m_introSkipped && m_mpvWidget && m_manualIntroSec > 0 &&
+        std::isfinite(position) && position >= 0.0 && position < m_manualIntroSec)
+    {
+        qInfo("SkipSegments: skipping manual intro [0-%.1f] at pos=%.1f",
+              static_cast<double>(m_manualIntroSec), position);
+        m_mpvWidget->seek(static_cast<double>(m_manualIntroSec));
+        m_introSkipped = true;
+    }
+    if (skipOutro && !m_outroSkipped && m_mpvWidget && m_manualOutroSec > 0 &&
+        m_totalDuration > 0.0 && std::isfinite(position) &&
+        position >= m_totalDuration - static_cast<double>(m_manualOutroSec))
+    {
+        qInfo("SkipSegments: skipping manual outro at pos=%.1f (duration=%.1f)",
+              position, m_totalDuration);
+        // 跳到结尾触发 EOF：连播接下一集；最后一集则停止播放返回详情。
+        m_mpvWidget->seek(m_totalDuration);
+        m_outroSkipped = true;
+    }
+
+    // ② IntroDB 社区数据（手动未设置或未命中时兜底）。
+    if (!m_episodeSegments.fetched || m_episodeSegments.notFound)
+        return;
 
     const auto skipIfInRange =
         [this, position](const IntroDBService::SegmentInfo &seg, const char *label, bool enabled, bool &flag)
@@ -1107,6 +1144,17 @@ void PlayerView::checkAndSkipSegment(double position)
 
     skipIfInRange(m_episodeSegments.intro, "intro", skipIntro, m_introSkipped);
     skipIfInRange(m_episodeSegments.outro, "outro", skipOutro, m_outroSkipped);
+}
+
+void PlayerView::refreshManualSkipSettings()
+{
+    const SkipSegmentsStore::Lengths lengths =
+        SkipSegmentsStore::instance()->resolve(m_seriesId, m_currentMediaId);
+    m_manualIntroSec = qMax(0, lengths.introSec);
+    m_manualOutroSec = qMax(0, lengths.outroSec);
+    qInfo("SkipSegments: manual settings resolved series=%s item=%s intro=%d outro=%d",
+          qPrintable(m_seriesId), qPrintable(m_currentMediaId),
+          m_manualIntroSec, m_manualOutroSec);
 }
 
 
@@ -4195,6 +4243,7 @@ void PlayerView::showSettingsMenu()
     {
         panel->addItem(tr("Danmaku Settings"), "danmaku_settings", false);
     }
+    panel->addItem(tr("Skip Intro / Outro"), "skip_segments", false);
 
     
     ServerProfile profile = m_core->serverManager()->activeProfile();
@@ -4281,6 +4330,12 @@ void PlayerView::showSettingsMenu()
                 {
                     dismissPopup();
                     openDanmakuSettingsDialog();
+                    return;
+                }
+                else if (action == "skip_segments")
+                {
+                    dismissPopup();
+                    openSkipSettingsDialog();
                     return;
                 }
 
@@ -5022,6 +5077,26 @@ void PlayerView::openSubtitleSettingsDialog()
     }
 
     auto *dialog = new PlayerSubtitleSettingsDialog(this);
+    trackPlayerDialog(dialog);
+}
+
+void PlayerView::openSkipSettingsDialog()
+{
+    if (m_activePopup)
+    {
+        m_activePopup->hide();
+        m_activePopup->close();
+        m_activePopup->deleteLater();
+        m_activePopup = nullptr;
+    }
+
+    auto *dialog = new SkipSettingsDialog(
+        m_seriesId, m_currentMediaId, m_seriesName,
+        [this]() { return m_currentPosition; },
+        [this]() { return m_totalDuration; },
+        this);
+    connect(dialog, &SkipSettingsDialog::settingsSaved, this,
+            [this]() { refreshManualSkipSettings(); });
     trackPlayerDialog(dialog);
 }
 
@@ -5990,8 +6065,11 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
     m_introSkipped = false;
     m_outroSkipped = false;
     m_segmentsRequested = false;
+    m_manualIntroSec = 0;
+    m_manualOutroSec = 0;
     clearMediaSwitcherCache();
     updateMediaSwitcherButton();
+    refreshManualSkipSettings();
 
     if (resolvedItem.type == "Episode" && !resolvedItem.seriesId.isEmpty())
     {
@@ -5999,6 +6077,7 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
         m_seriesId = resolvedItem.seriesId;
         m_seriesName = resolvedItem.seriesName;
         updateMediaSwitcherButton();
+        refreshManualSkipSettings();
         requestIntroDBSegments();
         
         ensureMediaSwitcherDataLoaded();
@@ -6023,6 +6102,7 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
                     safeThis->m_currentMediaItem = detail;
                     safeThis->clearMediaSwitcherCache();
                     safeThis->updateMediaSwitcherButton();
+                    safeThis->refreshManualSkipSettings();
                     safeThis->requestIntroDBSegments();
                     
                     safeThis->ensureMediaSwitcherDataLoaded();
