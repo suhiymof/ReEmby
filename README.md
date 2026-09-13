@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="src/qEmbyApp/resources/svg/qemby_logo.svg" width="120" alt="qEmby Logo"/>
+  <img src="src/qEmbyApp/resources/svg/qemby_logo.svg" width="120" alt="ReEmby Logo"/>
 </p>
 
-<h1 align="center">qEmby</h1>
+<h1 align="center">ReEmby</h1>
 
 <p align="center">
   <b>A modern desktop client for Emby & Jellyfin media servers</b><br/>
@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"/></a>
-  <a href="https://github.com/AlanHJ/qEmby/releases/latest"><img src="https://img.shields.io/github/v/release/AlanHJ/qEmby?include_prereleases&label=Download" alt="Release"/></a>
+  <a href="https://github.com/suhiymof/ReEmby/releases/latest"><img src="https://img.shields.io/github/v/release/suhiymof/ReEmby?include_prereleases&label=Download" alt="Release"/></a>
   <img src="https://img.shields.io/badge/Qt-6.x-green.svg" alt="Qt 6"/>
   <img src="https://img.shields.io/badge/C%2B%2B-20-orange.svg" alt="C++20"/>
   <img src="https://img.shields.io/badge/Platform-Windows%20|%20Linux%20|%20macOS-lightgrey.svg" alt="Platform: Windows | Linux | macOS"/>
@@ -22,6 +22,9 @@
 </p>
 
 ---
+
+> **ReEmby 是 [qEmby](https://github.com/AlanHJ/qEmby) 的 fork**，基于上游 MIT 许可代码持续开发，由 [suhiymof](https://github.com/suhiymof) 维护。
+> 原始项目版权归 [AlanHJ](https://github.com/AlanHJ) 所有；本 fork 的改动见下方「Fork 改动」。
 
 <a id="中文"></a>
 
@@ -38,34 +41,31 @@
 
 ## 📥 下载
 
-最新版本：**v0.0.7**
+前往 [Releases](https://github.com/suhiymof/ReEmby/releases/latest) 下载最新版本。
 
 | 安装包 | 说明 |
 |---|---|
-| [qEmby-0.0.7-Win-x64-Setup.exe](https://github.com/AlanHJ/qEmby/releases/download/v0.0.7/qEmby-0.0.7-Win-x64-Setup.exe) | Windows 10/11 x64 安装包 |
-| [qEmby-0.0.7-Win-x64.zip](https://github.com/AlanHJ/qEmby/releases/download/v0.0.7/qEmby-0.0.7-Win-x64.zip) | Windows 10/11 x64 绿色便携版 |
-| [qemby-0.0.7-macos-arm64.dmg](https://github.com/AlanHJ/qEmby/releases/download/v0.0.7/qemby-0.0.7-macos-arm64.dmg) | macOS 26+ (Apple 芯片) |
-| [qemby-0.0.7-x86_64.AppImage](https://github.com/AlanHJ/qEmby/releases/download/v0.0.7/qemby-0.0.7-x86_64.AppImage) | Linux x64 通用 AppImage |
-| [qemby_0.0.7-noble_amd64.deb](https://github.com/AlanHJ/qEmby/releases/download/v0.0.7/qemby_0.0.7-noble_amd64.deb) | Ubuntu 24.04 (Noble) 安装包 |
-| [qemby_0.0.7-jammy_amd64.deb](https://github.com/AlanHJ/qEmby/releases/download/v0.0.7/qemby_0.0.7-jammy_amd64.deb) | Ubuntu 22.04 (Jammy) 安装包 |
-| [qemby_0.0.7-bookworm_amd64.deb](https://github.com/AlanHJ/qEmby/releases/download/v0.0.7/qemby_0.0.7-bookworm_amd64.deb) | Debian 12 (Bookworm) 安装包 |
-| [qemby_0.0.7-trixie_amd64.deb](https://github.com/AlanHJ/qEmby/releases/download/v0.0.7/qemby_0.0.7-trixie_amd64.deb) | Debian 13 (Trixie) 安装包 |
+| `ReEmby-<版本>-win-x64-Setup.exe` | Windows 10/11 x64 安装包 |
+| `ReEmby-<版本>-win-x64.7z` | Windows 10/11 x64 绿色便携版（7z 解压即用） |
 
-旧版本可以在 [Releases](https://github.com/AlanHJ/qEmby/releases) 页面下载。
+> 绿色版解压后即可运行，数据（配置 / 缓存 / 日志）默认保存在程序目录下的 `config` 文件夹，拷走整个文件夹即可迁移；
+> 安装版因无程序目录写权限，会自动改用 `%LOCALAPPDATA%\suh\ReEmby`。
 
-## 🚀 v0.0.7 更新内容
+## 🚀 Fork 改动（相比上游 qEmby）
 
-- 弹弹Play新增 v2 直接搜索、标准动画标题发现和旧版接口回退的多阶段搜索流程。
-- 改进基于 TMDB 的季度和集数约束，以及手动搜索中的明确集数处理。
-- 改进弹幕候选排序，优先采用哈希、提供者 ID 和文件名匹配，并按作品、季度和集数组织结果。
-- 修复播放器覆盖对话框显示时按键事件穿透到播放器的问题。
-- 修复深色和浅色主题下播放列表搜索框的高度。
+- 🎬 **杜比视界（Dolby Vision）片源自动切换独立播放窗口** —— 内嵌渲染无法正确处理 DV 色彩空间（发绿），检测到纯 DV 片源时自动改走独立窗口播放
+- 📝 **副字幕（第二字幕轨）支持** —— 独立的轨道选择 / 位置 / 缩放 / 延迟，可与主字幕、弹幕同时显示
+- 🖥️ **独立播放窗口的透明 HUD 覆盖层** —— 播放控制、弹幕、字幕菜单等覆盖层与内嵌模式体验一致，且不遮挡画面
+- 📦 **绿色便携数据目录** —— 数据统一存放在程序目录下的 `config` 文件夹（旧版为系统 AppData 目录）
+- 🌐 **客户端身份改为 ReEmby 原生** —— 不再伪装第三方播放器 UA，服务器设备列表中显示 `ReEmby`
+- 🔧 上游之后的大量修复与打磨：字幕轨道选中同步、弹幕渲染与菜单、内存与日志、中文翻译补全等
 
 ## ✨ 功能特性
 
 - 🎬 浏览和管理你的 Emby / Jellyfin 媒体库
-- ▶️ 内置 **libmpv** 驱动的视频播放器
+- ▶️ 内置 **libmpv** 驱动的视频播放器（内嵌 / 独立窗口双形态，DV 片源自动适配）
 - 💬 弹幕播放，支持弹弹Play与 LogVar / danmu_api、搜索、匹配、缓存和原生覆盖层渲染
+- 📝 主副双字幕、ASS 样式配置、位置拖拽等字幕能力
 - 🧩 支持元数据编辑、媒体识别、图片更新和播放列表管理
 - 📥 下载管理器
 - 🔄 自动检查更新和 Windows 应用内升级
@@ -74,7 +74,7 @@
 - 🌐 国际化支持（中文 / 英文 / 法语）
 - 🔍 支持搜索历史的媒体搜索
 - 📺 当前支持电视剧、电影媒体类型
-- 📦 提供 Windows 安装包 / 绿色版、Linux AppImage / deb 包和 macOS DMG
+- 📦 提供 Windows 安装包 / 绿色版（7z），Linux / macOS 构建脚本保留
 - ⚡ 基于 C++20 协程的异步操作（QCoro）
 - 🪟 原生风格的自定义窗口边框（QWindowKit）
 
@@ -82,9 +82,9 @@
 
 | 平台 | 状态 |
 |---|---|
-| Windows 10/11 x64 | ✅ 已适配 |
-| Linux x64 (AppImage / deb) | ✅ 已适配 |
-| macOS 26+ (Apple Silicon) | ✅ 已适配 |
+| Windows 10/11 x64 | ✅ 已适配（主要平台） |
+| Linux x64 | 🛠️ 构建脚本保留，未验证 |
+| macOS (Apple Silicon) | 🛠️ 构建脚本保留，未验证 |
 
 ## 📋 开发路线图
 
@@ -103,9 +103,9 @@
 - [x] 自动检查更新和 Windows 应用内升级
 - [x] 单例应用模式
 - [x] 多弹幕源支持（弹弹Play / danmu_api）
+- [x] 副字幕（双字幕）支持
+- [x] 杜比视界片源自动适配独立窗口
 - [ ] AI 字幕生成
-- [x] Linux 平台适配
-- [x] macOS 平台适配
 
 > 本项目为个人兴趣开发，欢迎贡献和反馈！
 
@@ -123,7 +123,7 @@
 
 ## 📦 环境要求
 
-- **Qt 6.x**（包含 Widgets、Core、Network、Concurrent、OpenGLWidgets、LinguistTools、WebSockets 模块）
+- **Qt 6.x**（包含 Widgets、Core、Network、Concurrent、OpenGLWidgets、WebSockets、WebEngineWidgets、WebChannel、Positioning 模块）
 - **CMake** ≥ 3.16
 - 支持 **C++20** 的编译器（推荐 MSVC 2022）
 - **libmpv** 开发文件（见下方说明）
@@ -134,8 +134,8 @@
 ### 1. 克隆仓库
 
 ```bash
-git clone --recursive https://github.com/AlanHJ/qEmby.git
-cd qEmby
+git clone --recursive https://github.com/suhiymof/ReEmby.git
+cd ReEmby
 ```
 
 ### 2. 获取 libmpv
@@ -166,17 +166,18 @@ cmake --build build --config Release
 ```
 
 > **提示：** 在 Windows 上使用 MSVC 时，也可以直接在 Qt Creator 或 Visual Studio 中打开 CMake 项目。
+> 构建后的 `build/bin/Release` 即完整绿色包（windeployqt 会自动部署 Qt 依赖）。
 
 ## 📁 项目结构
 
 ```
-qEmby/
+ReEmby/
 ├── CMakeLists.txt              # 根 CMake 配置
 ├── libs/
 │   ├── libmpv/                 # libmpv SDK（未纳入版本控制，见构建指南）
 │   └── qwindowkit/             # QWindowKit（git 子模块）
 └── src/
-    ├── qEmbyCore/              # 核心库（API、模型、服务）
+    ├── qEmbyCore/              # 核心库（API、模型、服务；内部命名沿用 qEmby）
     │   ├── api/                # Emby/Jellyfin API 客户端
     │   ├── config/             # 配置管理
     │   ├── models/             # 数据模型
@@ -189,18 +190,17 @@ qEmby/
         └── views/              # 应用视图
 ```
 
-## 💬 交流社区
+## 🐛 反馈
 
-加入 Telegram 交流群：[https://t.me/+qXQ-zU56z9gxOWNl](https://t.me/+qXQ-zU56z9gxOWNl)
-
-> **注意：** 本项目是为爱发电项目，测试覆盖不全，敬请谅解。如有问题请通过 [GitHub Issues](https://github.com/AlanHJ/qEmby/issues) 反馈。
+> **注意：** 本项目为个人兴趣开发，测试覆盖不全，敬请谅解。如有问题请通过 [GitHub Issues](https://github.com/suhiymof/ReEmby/issues) 反馈。
 
 ## 📄 许可证
 
-本项目基于 [MIT 许可证](LICENSE) 开源。
+本项目基于 [MIT 许可证](LICENSE) 开源。原始项目 [qEmby](https://github.com/AlanHJ/qEmby) 版权归 AlanHJ 所有。
 
 ## 🙏 致谢
 
+- [qEmby](https://github.com/AlanHJ/qEmby) — 本 fork 的上游项目
 - [Qt](https://www.qt.io/) — 应用框架 (LGPL v3)
 - [mpv](https://mpv.io/) — 媒体播放引擎 (LGPL v2.1+)
 - [QWindowKit](https://github.com/stdware/qwindowkit) — 自定义窗口框架 (Apache-2.0)
@@ -224,34 +224,31 @@ qEmby/
 
 ## 📥 Download
 
-Latest release: **v0.0.7**
+Grab the latest build from the [Releases](https://github.com/suhiymof/ReEmby/releases/latest) page.
 
 | Package | Description |
 |---|---|
-| [qEmby-0.0.7-Win-x64-Setup.exe](https://github.com/AlanHJ/qEmby/releases/download/v0.0.7/qEmby-0.0.7-Win-x64-Setup.exe) | Windows 10/11 x64 installer |
-| [qEmby-0.0.7-Win-x64.zip](https://github.com/AlanHJ/qEmby/releases/download/v0.0.7/qEmby-0.0.7-Win-x64.zip) | Windows 10/11 x64 portable package |
-| [qemby-0.0.7-macos-arm64.dmg](https://github.com/AlanHJ/qEmby/releases/download/v0.0.7/qemby-0.0.7-macos-arm64.dmg) | macOS 26+ (Apple Silicon) |
-| [qemby-0.0.7-x86_64.AppImage](https://github.com/AlanHJ/qEmby/releases/download/v0.0.7/qemby-0.0.7-x86_64.AppImage) | Universal Linux x64 AppImage |
-| [qemby_0.0.7-noble_amd64.deb](https://github.com/AlanHJ/qEmby/releases/download/v0.0.7/qemby_0.0.7-noble_amd64.deb) | Ubuntu 24.04 (Noble) package |
-| [qemby_0.0.7-jammy_amd64.deb](https://github.com/AlanHJ/qEmby/releases/download/v0.0.7/qemby_0.0.7-jammy_amd64.deb) | Ubuntu 22.04 (Jammy) package |
-| [qemby_0.0.7-bookworm_amd64.deb](https://github.com/AlanHJ/qEmby/releases/download/v0.0.7/qemby_0.0.7-bookworm_amd64.deb) | Debian 12 (Bookworm) package |
-| [qemby_0.0.7-trixie_amd64.deb](https://github.com/AlanHJ/qEmby/releases/download/v0.0.7/qemby_0.0.7-trixie_amd64.deb) | Debian 13 (Trixie) package |
+| `ReEmby-<version>-win-x64-Setup.exe` | Windows 10/11 x64 installer |
+| `ReEmby-<version>-win-x64.7z` | Windows 10/11 x64 portable package (7z) |
 
-Older releases are available on the [Releases](https://github.com/AlanHJ/qEmby/releases) page.
+> The portable build keeps all data (config / cache / logs) in a `config` folder next to the executable — move the whole folder to migrate.
+> The installer falls back to `%LOCALAPPDATA%\suh\ReEmby` since the install directory is not writable.
 
-## 🚀 What's New in v0.0.7
+## 🚀 Fork Changes (vs. upstream qEmby)
 
-- Added a multi-stage DandanPlay search flow with direct v2 search, canonical anime-title discovery, and legacy fallback.
-- Improved TMDB-constrained season and episode matching and explicit episode handling in manual searches.
-- Improved danmaku candidate ordering by prioritizing hash, provider-ID, and filename matches and organizing results by work, season, and episode.
-- Prevented keyboard events from passing through to the player while an overlay dialog is visible.
-- Fixed the playlist search input height in both Dark and Light themes.
+- 🎬 **Dolby Vision sources automatically switch to the independent player window** — the embedded renderer cannot handle DV color (green tint), so pure-DV sources are routed to the detached window
+- 📝 **Secondary subtitle support** — separate track / position / scale / delay, shown alongside the primary subtitle and danmaku
+- 🖥️ **Translucent HUD overlay for the independent window** — playback controls, danmaku and subtitle menus behave the same as embedded, without covering the video
+- 📦 **Portable data directory** — data lives in a `config` folder next to the executable (previously under the system AppData directory)
+- 🌐 **Genuine ReEmby client identity** — no more masquerading as a third-party player UA; servers list the client as `ReEmby`
+- 🔧 Many fixes and polish since upstream: subtitle track selection sync, danmaku rendering and menus, memory/logging, translation completeness
 
 ## ✨ Features
 
 - 🎬 Browse and manage your Emby / Jellyfin media library
-- ▶️ Built-in video player powered by **libmpv**
+- ▶️ Built-in video player powered by **libmpv** (embedded / independent window, DV-aware)
 - 💬 Danmaku playback with DandanPlay and LogVar / danmu_api, search, matching, cache and native overlay rendering
+- 📝 Primary + secondary subtitles, ASS styling and drag-to-position
 - 🧩 Metadata editing, media identification, image updates and playlist tools
 - 📥 Download manager
 - 🔄 Automatic update checks and in-app Windows updates
@@ -260,7 +257,7 @@ Older releases are available on the [Releases](https://github.com/AlanHJ/qEmby/r
 - 🌐 Internationalization support (Chinese / English / French)
 - 🔍 Media search with history
 - 📺 TV series and movies media types
-- 📦 Windows installer / portable packages, Linux AppImage / deb packages, and macOS DMG
+- 📦 Windows installer / portable packages (7z); Linux & macOS build scripts kept
 - ⚡ Asynchronous operations with C++20 coroutines (QCoro)
 - 🪟 Custom window frame with native look (QWindowKit)
 
@@ -268,9 +265,9 @@ Older releases are available on the [Releases](https://github.com/AlanHJ/qEmby/r
 
 | Platform | Status |
 |---|---|
-| Windows 10/11 x64 | ✅ Supported |
-| Linux x64 (AppImage / deb) | ✅ Supported |
-| macOS 26+ (Apple Silicon) | ✅ Supported |
+| Windows 10/11 x64 | ✅ Supported (primary platform) |
+| Linux x64 | 🛠️ Build scripts kept, unverified |
+| macOS (Apple Silicon) | 🛠️ Build scripts kept, unverified |
 
 ## 📋 Roadmap
 
@@ -289,9 +286,9 @@ Older releases are available on the [Releases](https://github.com/AlanHJ/qEmby/r
 - [x] Automatic update checks and in-app Windows updates
 - [x] Single-application mode
 - [x] Multiple danmaku providers (DandanPlay / danmu_api)
+- [x] Secondary (dual) subtitle support
+- [x] Automatic independent-window routing for Dolby Vision sources
 - [ ] AI-powered subtitle generation
-- [x] Linux platform support
-- [x] macOS platform support
 
 > This is a personal hobby project, developed out of interest. Contributions and feedback are welcome!
 
@@ -309,7 +306,7 @@ Older releases are available on the [Releases](https://github.com/AlanHJ/qEmby/r
 
 ## 📦 Prerequisites
 
-- **Qt 6.x** (with Widgets, Core, Network, Concurrent, OpenGLWidgets, LinguistTools, WebSockets)
+- **Qt 6.x** (with Widgets, Core, Network, Concurrent, OpenGLWidgets, WebSockets, WebEngineWidgets, WebChannel, Positioning)
 - **CMake** ≥ 3.16
 - **C++20** compatible compiler (MSVC 2022 recommended)
 - **libmpv** development files (see below)
@@ -320,8 +317,8 @@ Older releases are available on the [Releases](https://github.com/AlanHJ/qEmby/r
 ### 1. Clone the repository
 
 ```bash
-git clone --recursive https://github.com/AlanHJ/qEmby.git
-cd qEmby
+git clone --recursive https://github.com/suhiymof/ReEmby.git
+cd ReEmby
 ```
 
 ### 2. Get libmpv
@@ -352,17 +349,18 @@ cmake --build build --config Release
 ```
 
 > **Tip:** On Windows with MSVC, you can also open the project in Qt Creator or Visual Studio with CMake support.
+> `build/bin/Release` after the build is a complete portable package (windeployqt deploys the Qt dependencies automatically).
 
 ## 📁 Project Structure
 
 ```
-qEmby/
+ReEmby/
 ├── CMakeLists.txt              # Root CMake configuration
 ├── libs/
 │   ├── libmpv/                 # libmpv SDK (not tracked, see Build section)
 │   └── qwindowkit/             # QWindowKit (git submodule)
 └── src/
-    ├── qEmbyCore/              # Core library (API, models, services)
+    ├── qEmbyCore/              # Core library (API, models, services; internal naming kept)
     │   ├── api/                # Emby/Jellyfin API client
     │   ├── config/             # Configuration management
     │   ├── models/             # Data models
@@ -375,18 +373,17 @@ qEmby/
         └── views/              # Application views
 ```
 
-## 💬 Community
+## 🐛 Feedback
 
-Join our Telegram group: [https://t.me/+qXQ-zU56z9gxOWNl](https://t.me/+qXQ-zU56z9gxOWNl)
-
-> **Note:** This is a passion project with limited testing. Your understanding is appreciated. Please report any issues via [GitHub Issues](https://github.com/AlanHJ/qEmby/issues).
+> **Note:** This is a passion project with limited testing. Your understanding is appreciated. Please report any issues via [GitHub Issues](https://github.com/suhiymof/ReEmby/issues).
 
 ## 📄 License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [MIT License](LICENSE). The original project [qEmby](https://github.com/AlanHJ/qEmby) is copyright AlanHJ.
 
 ## 🙏 Acknowledgements
 
+- [qEmby](https://github.com/AlanHJ/qEmby) — the upstream project this fork is based on
 - [Qt](https://www.qt.io/) — Application framework (LGPL v3)
 - [mpv](https://mpv.io/) — Media player engine (LGPL v2.1+)
 - [QWindowKit](https://github.com/stdware/qwindowkit) — Custom window frame (Apache-2.0)
