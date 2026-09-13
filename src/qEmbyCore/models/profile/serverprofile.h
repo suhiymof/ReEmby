@@ -6,6 +6,7 @@
 #include <QUuid>
 #include <config/config_keys.h>
 #include <config/configstore.h>
+#include <qEmbyCore_global.h>
 #include <utils/securesecretbox.h>
 
 struct ServerProfile {
@@ -77,7 +78,9 @@ struct ServerProfile {
     // third-party player ("RodelPlayer/...", i.e. 小幻影视) because some
     // servers run strict UA whitelists; that masquerade is removed so Emby
     // dashboards and logs show a genuine "ReEmby/<version>" identity.
-    static QString defaultUserAgent();
+    // QEMBYCORE_EXPORT：定义在 qEmbyCore.dll 内、被 qEmbyApp 调用，必须导出
+    // （原来的 header 内联定义不需要，改成 .cpp 后漏导出会导致 LNK2019）。
+    QEMBYCORE_EXPORT static QString defaultUserAgent();
 
     // Resolution order: per-server customUserAgent -> global
     // ConfigKeys::CustomUserAgent -> built-in default.
