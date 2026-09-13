@@ -23,7 +23,7 @@
 
 ---
 
-> **ReEmby 是 [qEmby](https://github.com/AlanHJ/qEmby) 的 fork**，基于上游 MIT 许可代码持续开发，由 [suhiymof](https://github.com/suhiymof) 维护。
+> **ReEmby 是 [qEmby](https://github.com/AlanHJ/qEmby) 的 fork**，基于上游 MIT 许可代码持续开发。
 > 原始项目版权归 [AlanHJ](https://github.com/AlanHJ) 所有；本 fork 的改动见下方「Fork 改动」。
 
 <a id="中文"></a>
@@ -57,7 +57,6 @@
 - 📝 **副字幕（第二字幕轨）支持** —— 独立的轨道选择 / 位置 / 缩放 / 延迟，可与主字幕、弹幕同时显示
 - 🖥️ **独立播放窗口的透明 HUD 覆盖层** —— 播放控制、弹幕、字幕菜单等覆盖层与内嵌模式体验一致，且不遮挡画面
 - 📦 **绿色便携数据目录** —— 数据统一存放在程序目录下的 `config` 文件夹（旧版为系统 AppData 目录）
-- 🌐 **客户端身份改为 ReEmby 原生** —— 不再伪装第三方播放器 UA，服务器设备列表中显示 `ReEmby`
 - 🔧 上游之后的大量修复与打磨：字幕轨道选中同步、弹幕渲染与菜单、内存与日志、中文翻译补全等
 
 ## ✨ 功能特性
