@@ -14,6 +14,7 @@
 #ifdef Q_OS_WIN
 #include <QThread>
 #include <windows.h>
+#include <utils/apppaths.h>
 #endif
 
 
@@ -248,8 +249,7 @@ bool MpvController::init(bool standalone, void *wid) {
     
     bool useMpvConf = ConfigStore::instance()->get<bool>(ConfigKeys::PlayerUseMpvConf, false);
     if (useMpvConf) {
-        QString mpvConfDir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation)
-                                 .replace(QRegularExpression("[^/]+$"), "mpv");
+        QString mpvConfDir = AppPaths::dataRoot() + QStringLiteral("/mpv");
         mpv_set_option_string(m_mpv, "config-dir", mpvConfDir.toUtf8().constData());
         mpv_set_option_string(m_mpv, "config", "yes");
     }

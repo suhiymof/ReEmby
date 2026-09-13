@@ -13,6 +13,7 @@
 #include "managers/singleapplicationmanager.h"
 #include "config/config_keys.h"
 #include "config/configstore.h"
+#include "utils/apppaths.h"
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -44,12 +45,17 @@ int main(int argc, char *argv[]) {
   QApplication a(argc, argv);
   a.setApplicationName(APP_NAME);
   a.setApplicationVersion(APP_VERSION);
-  // 配置 / 缓存 / 日志目录 = %LOCALAPPDATA%/<OrganizationName>/<ApplicationName>
-  // （Windows 上即 AppData\Local\suh\ReEmby）。改名（qEmby -> ReEmby）后旧目录
-  // 不会自动迁移：把旧目录（AppData\Local\suh\qEmby）里的 config.ini 和
-  // secret-box-key.bin 拷到新目录即可，其余缓存可丢弃重建。
+  // 数据目录由 AppPaths 决定（见下）：绿色包默认落到 <exe目录>/config，
+  // 安装版（无写权限）回退 %LOCALAPPDATA%/suh/ReEmby。从旧版本升级不会自动
+  // 迁移数据：把旧目录的 config.ini、secret-box-key.bin、servers.json 拷到
+  // 新数据目录即可，缓存可丢弃重建。
   a.setOrganizationName("suh");
-  a.setOrganizationDomain("github.com/suhiymof/qEmby");
+  a.setOrganizationDomain("github.com/suhiymof/ReEmby");
+
+  // 数据根：优先 <exe目录>/config（绿色包便携，拷走即走），目录不可写时
+  // 回退系统位置 %LOCALAPPDATA%/suh/ReEmby；--data-dir=<path> 可显式覆盖。
+  // 必须在任何持久化访问（ConfigStore/LogManager 等）之前决定。
+  AppPaths::initialize(a.arguments());
 
   LogManager::instance()->init();
 

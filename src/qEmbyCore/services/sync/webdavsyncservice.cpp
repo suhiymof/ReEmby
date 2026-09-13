@@ -22,6 +22,7 @@
 #include <memory>
 #include <stdexcept>
 #include <utility>
+#include <utils/apppaths.h>
 
 namespace
 {
@@ -70,7 +71,7 @@ bool looksEncryptedPayload(const QByteArray &bytes)
 
 QString serversJsonPath()
 {
-    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    const QString dir = AppPaths::dataRoot();
     return QDir(dir).filePath(QStringLiteral("servers.json"));
 }
 

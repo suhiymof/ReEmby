@@ -7,6 +7,7 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/sinks/null_sink.h>
+#include <utils/apppaths.h>
 
 static const char *kLoggerName = "reemby";
 static const int kMaxFileSize = 5 * 1024 * 1024; 
@@ -52,9 +53,7 @@ LogManager *LogManager::instance() {
 }
 
 QString LogManager::logFilePath() const {
-  QString configDir =
-      QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
-  return configDir + "/reemby.log";
+  return AppPaths::dataRoot() + QStringLiteral("/reemby.log");
 }
 
 void LogManager::init() {
@@ -67,6 +66,10 @@ void LogManager::init() {
   if (enabled) {
     enable();
   }
+  // 数据目录是所有配置/缓存/日志的根（便携模式下位于 exe 旁的 config 目录），
+  // 启动时记录一次，便于定位文件位置。
+  qInfo().noquote() << "[AppPaths] data root:" << AppPaths::dataRoot()
+                    << "| portable:" << AppPaths::isPortable();
 }
 
 void LogManager::enable() {

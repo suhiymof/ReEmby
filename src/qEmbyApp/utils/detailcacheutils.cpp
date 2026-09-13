@@ -12,6 +12,7 @@
 #include <QJsonValue>
 #include <QSaveFile>
 #include <QStandardPaths>
+#include <utils/apppaths.h>
 
 namespace {
 
@@ -399,14 +400,12 @@ QByteArray normalizedSectionsBytes(
   return QJsonDocument(sectionsToJson(entry)).toJson(QJsonDocument::Compact);
 }
 
-QString detailCacheRoot(QStandardPaths::StandardLocation location) {
-  return QStandardPaths::writableLocation(location) +
-         QStringLiteral("/detail-cache");
+QString detailCacheRoot(const QString &baseDir) {
+  return baseDir + QStringLiteral("/detail-cache");
 }
 
-QString detailImageCacheRoot(QStandardPaths::StandardLocation location) {
-  return QStandardPaths::writableLocation(location) +
-         QStringLiteral("/detail-cache-images");
+QString detailImageCacheRoot(const QString &baseDir) {
+  return baseDir + QStringLiteral("/detail-cache-images");
 }
 
 QString cacheFilePathForRoot(const QString &root, const QString &serverId,
@@ -448,7 +447,7 @@ namespace DetailCacheUtils {
 
 QString cacheFilePath(const QString &serverId, const QString &userId,
                       const QString &itemId) {
-  return cacheFilePathForRoot(detailCacheRoot(QStandardPaths::CacheLocation),
+  return cacheFilePathForRoot(detailCacheRoot(AppPaths::cacheDir()),
                               serverId, userId, itemId);
 }
 
@@ -458,7 +457,7 @@ QString imageCacheFilePath(const QString &serverId, const QString &userId,
                            const QString &imageType,
                            const QString &imageTag, int maxWidth) {
   return imageCacheFilePathForRoot(
-      detailImageCacheRoot(QStandardPaths::CacheLocation), serverId, userId,
+      detailImageCacheRoot(AppPaths::cacheDir()), serverId, userId,
       ownerItemId, role, imageItemId, imageType, imageTag, maxWidth);
 }
 
@@ -483,7 +482,8 @@ std::optional<DetailCacheEntry> load(const QString &serverId,
   QFile file(filePath);
   if (!file.open(QIODevice::ReadOnly)) {
     const QString legacyFilePath =
-        cacheFilePathForRoot(detailCacheRoot(QStandardPaths::AppDataLocation),
+        cacheFilePathForRoot(detailCacheRoot(QStandardPaths::writableLocation(
+               QStandardPaths::AppDataLocation)),
                              serverId, userId, itemId);
     if (legacyFilePath == filePath)
       return std::nullopt;
@@ -591,7 +591,8 @@ std::optional<QImage> loadImage(const QString &serverId, const QString &userId,
   QImage image(filePath);
   if (image.isNull()) {
     const QString legacyFilePath = imageCacheFilePathForRoot(
-        detailImageCacheRoot(QStandardPaths::AppDataLocation), serverId,
+        detailImageCacheRoot(QStandardPaths::writableLocation(
+               QStandardPaths::AppDataLocation)), serverId,
         userId, ownerItemId, role, imageItemId, imageType, imageTag, maxWidth);
     if (legacyFilePath != filePath)
       image.load(legacyFilePath);

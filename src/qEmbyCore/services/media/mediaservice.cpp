@@ -37,6 +37,7 @@
 #include <stdexcept>
 #include <QSysInfo>
 #include <utility>
+#include <utils/apppaths.h>
 
 namespace
 {
@@ -324,12 +325,19 @@ namespace
         const QString clientName = userAgent.section('/', 0, 0).trimmed();
         const QString version = userAgent.section('/', 1).section(' ', 0, 0).trimmed();
         const QString device = QSysInfo::machineHostName();
+        // UA 解析不出客户端版本时回退到当前构建版本，避免发出 "Version=1.0"
+        // 这种与真实身份不符的头。
+        QString resolvedVersion =
+            version.isEmpty() ? QCoreApplication::applicationVersion() : version;
+        if (resolvedVersion.isEmpty()) {
+            resolvedVersion = QStringLiteral("0");
+        }
         QString auth = QString("Emby Client=\"%1\", Device=\"%2\", "
                                "DeviceId=\"%3\", Version=\"%4\"")
                            .arg(clientName.isEmpty() ? QStringLiteral("ReEmby") : clientName,
                                 device,
                                 profile.deviceId,
-                                version.isEmpty() ? QStringLiteral("1.0") : version);
+                                resolvedVersion);
         if (!profile.accessToken.isEmpty()) {
             auth += QString(", Token=\"%1\"").arg(profile.accessToken);
         }
@@ -498,7 +506,7 @@ MediaService::MediaService(ServerManager *serverManager, QObject *parent)
 {
     m_imageManager = new QNetworkAccessManager(this);
     auto *diskCache = new QNetworkDiskCache(this);
-    QString cachePath = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/reEmby_ImageCache";
+    QString cachePath = AppPaths::cacheDir() + "/reEmby_ImageCache";
     QDir().mkpath(cachePath);
     diskCache->setCacheDirectory(cachePath);
     diskCache->setMaximumCacheSize(500 * 1024 * 1024);
@@ -3182,7 +3190,7 @@ void MediaService::updateUserViewsCache(MediaItem view, QString serverId,
 
 QString RecommendCache::cacheFilePath(const QString &serverId)
 {
-    return QStandardPaths::writableLocation(QStandardPaths::CacheLocation) +
+    return AppPaths::cacheDir() +
            QStringLiteral("/reEmby_RecommendCache_%1.json").arg(serverId);
 }
 

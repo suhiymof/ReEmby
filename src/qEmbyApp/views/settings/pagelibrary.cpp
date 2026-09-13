@@ -18,6 +18,7 @@
 #include <QStandardPaths>
 #include <QDir>
 #include <QFileInfo>
+#include <utils/apppaths.h>
 
 namespace {
 const QString kHomeSectionOrderIconPath =
@@ -319,7 +320,7 @@ void PageLibrary::updateCacheSizes() {
   
   QString sid = m_core->serverManager()->activeProfile().id;
   QString dataCachePath =
-      QStandardPaths::writableLocation(QStandardPaths::CacheLocation) +
+      AppPaths::cacheDir() +
       QStringLiteral("/reEmby_RecommendCache_%1.json").arg(sid);
   QFileInfo dataInfo(dataCachePath);
   qint64 dataSize = dataInfo.exists() ? dataInfo.size() : 0;
@@ -327,8 +328,7 @@ void PageLibrary::updateCacheSizes() {
 
   
   QString imgCachePath =
-      QStandardPaths::writableLocation(QStandardPaths::CacheLocation) +
-      "/reEmby_ImageCache";
+      AppPaths::cacheDir() + "/reEmby_ImageCache";
   qint64 imgSize = FileUtils::calcDirSize(imgCachePath);
   m_imgCacheSizeLabel->setText(FileUtils::formatSize(imgSize));
 }

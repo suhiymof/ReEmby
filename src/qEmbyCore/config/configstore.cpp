@@ -4,6 +4,7 @@
 #include <QStandardPaths>
 #include <QCoreApplication>
 #include <QDebug>
+#include <utils/apppaths.h>
 
 ConfigStore* ConfigStore::instance() {
     
@@ -35,7 +36,7 @@ QStringList ConfigStore::legacyStorageKeys(const QString& key) {
 
 ConfigStore::ConfigStore(QObject* parent) : QObject(parent) {
     
-    QString configPath = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+    QString configPath = AppPaths::dataRoot();
     QDir().mkpath(configPath);
     QString configFile = configPath + "/config.ini";
 

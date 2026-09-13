@@ -14,9 +14,11 @@
 #include "models/profile/proxyconfig.h"
 #include "qembycore.h"
 #include "services/manager/servermanager.h"
+#include "utils/apppaths.h"
 #include <QDesktopServices>
 #include <QDir>
 #include <QFileInfo>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -148,12 +150,13 @@ PageGeneral::PageGeneral(QEmbyCore *core, QWidget *parent)
     dlg->deleteLater();
   });
 
-  // Global default User-Agent: applied to servers that have no per-server
-  // UA override (login form). Empty = keep qEmby defaults.
+  // Global default User-Agent 卡片已隐藏：客户端身份固定为 ReEmby 原生
+  // （ServerProfile::defaultUserAgent）。读写逻辑保留（CustomUserAgent 配置
+  // 键仍生效、可手工设置），只是不展示入口；如需恢复删除 setVisible(false)。
   {
     auto *uaEdit = new QLineEdit(this);
     uaEdit->setPlaceholderText(
-        tr("e.g. RodelPlayer/2.2607.7.0 (Windows NT 10.0.26100; x64)"));
+        tr("e.g. ReEmby/0.10.1 (Windows NT 10.0.26100; x64)"));
     uaEdit->setMinimumWidth(280);
     uaEdit->setClearButtonEnabled(true);
     uaEdit->setText(ConfigStore::instance()->get<QString>(
@@ -162,12 +165,14 @@ PageGeneral::PageGeneral(QEmbyCore *core, QWidget *parent)
       ConfigStore::instance()->set(ConfigKeys::CustomUserAgent,
                                    uaEdit->text().trimmed());
     });
-    m_mainLayout->addWidget(new SettingsCard(
+    auto *uaCard = new SettingsCard(
         ":/svg/dark/proxy.svg", tr("Custom User-Agent"),
         tr("Global default UA for API and streaming requests. Servers with "
            "strict client whitelists may reject the default UA; per-server "
            "UA set in the login form takes precedence."),
-        uaEdit, QString(), this));
+        uaEdit, QString(), this);
+    uaCard->setVisible(false);
+    m_mainLayout->addWidget(uaCard);
   }
 
   
@@ -284,6 +289,30 @@ PageGeneral::PageGeneral(QEmbyCore *core, QWidget *parent)
         QFileInfo(LogManager::instance()->logFilePath()).absolutePath();
     QDesktopServices::openUrl(QUrl::fromLocalFile(logDir));
   });
+
+  // 数据目录（只读展示）：AppPaths 选定的实际位置 + 一键打开。
+  {
+    auto *dataRootRow = new QWidget(this);
+    auto *dataRootLayout = new QHBoxLayout(dataRootRow);
+    dataRootLayout->setContentsMargins(0, 0, 0, 0);
+    dataRootLayout->setSpacing(8);
+    auto *dataRootLabel = new QLabel(AppPaths::dataRoot(), dataRootRow);
+    dataRootLabel->setObjectName("SettingsCardDesc");
+    dataRootLabel->setWordWrap(true);
+    dataRootLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    auto *openDataRootBtn = new QPushButton(tr("Open Folder"), dataRootRow);
+    openDataRootBtn->setObjectName(QStringLiteral("secondary-btn"));
+    connect(openDataRootBtn, &QPushButton::clicked, this, []() {
+      QDesktopServices::openUrl(QUrl::fromLocalFile(AppPaths::dataRoot()));
+    });
+    dataRootLayout->addWidget(dataRootLabel, 1);
+    dataRootLayout->addWidget(openDataRootBtn);
+    m_mainLayout->addWidget(new SettingsCard(
+        ":/svg/dark/folder.svg", tr("Data Directory"),
+        tr("Where config, cache and logs are stored. Portable builds keep "
+           "this in the config folder next to the executable"),
+        dataRootRow, QString(), this));
+  }
 
   m_mainLayout->addStretch();
 }

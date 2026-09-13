@@ -6,6 +6,7 @@
 #include <QStandardPaths>
 #include <QDir>
 #include <QTimer>
+#include <utils/apppaths.h>
 
 ServerManager::ServerManager(NetworkManager* nm, QObject* parent)
     : QObject(parent), m_network(nm) {
@@ -230,7 +231,7 @@ void ServerManager::saveSettings() {
         array.append(obj);
     }
 
-    QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QString path = AppPaths::dataRoot();
     QDir().mkpath(path);
     QFile file(path + "/servers.json");
     if (file.open(QIODevice::WriteOnly)) {
@@ -239,7 +240,7 @@ void ServerManager::saveSettings() {
 }
 
 void ServerManager::loadSettings() {
-    QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QString path = AppPaths::dataRoot();
     QFile file(path + "/servers.json");
     if (!file.open(QIODevice::ReadOnly)) return;
 

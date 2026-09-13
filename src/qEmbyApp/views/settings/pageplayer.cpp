@@ -50,6 +50,7 @@
 #include <algorithm>
 #include <memory>
 #include <qembycore.h>
+#include <utils/apppaths.h>
 
 PagePlayer::PagePlayer(QEmbyCore *core, QWidget *parent)
     : SettingsPageBase(core, tr("Player"), parent) {
@@ -211,7 +212,7 @@ PagePlayer::PagePlayer(QEmbyCore *core, QWidget *parent)
     cacheDirBrowse->setObjectName(QStringLiteral("secondary-btn"));
     connect(cacheDirBrowse, &QPushButton::clicked, this, [cacheDirInput]() {
       const QString start = cacheDirInput->text().trimmed().isEmpty()
-                                ? QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
+                                ? AppPaths::cacheDir()
                                 : cacheDirInput->text().trimmed();
       const QString picked = QFileDialog::getExistingDirectory(
           cacheDirInput, tr("Select Cache Directory"), start,
@@ -516,9 +517,7 @@ PagePlayer::PagePlayer(QEmbyCore *core, QWidget *parent)
   
   auto *confPanel = new SettingsSubPanel(":/svg/dark/mpv-conf.svg", this);
 
-  QString mpvConfDir =
-      QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation)
-          .replace(QRegularExpression("[^/]+$"), "mpv");
+  const QString mpvConfDir = AppPaths::dataRoot() + QStringLiteral("/mpv");
   QString mpvConfPath = mpvConfDir + "/mpv.conf";
 
   auto *confPathLabel = new QLabel(

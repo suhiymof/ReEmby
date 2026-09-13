@@ -12,6 +12,7 @@
 #include <QStandardPaths>
 
 #include <cstring>
+#include <utils/apppaths.h>
 
 namespace
 {
@@ -36,7 +37,7 @@ constexpr int kKdfOutLen = kAesKeyLen + kHmacKeyLen;
 
 QString localKeyFilePath()
 {
-    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+    const QString dir = AppPaths::dataRoot();
     return QDir(dir).filePath(QStringLiteral("secret-box-key.bin"));
 }
 

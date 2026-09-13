@@ -12,6 +12,7 @@
 #include <QStandardPaths>
 #include <QSysInfo>
 #include <QVariant>
+#include <utils/apppaths.h>
 
 namespace
 {
@@ -32,7 +33,7 @@ constexpr char kKConfigEntries[] = "configEntries";
 
 QString serversJsonPath()
 {
-    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    const QString dir = AppPaths::dataRoot();
     return QDir(dir).filePath(QStringLiteral("servers.json"));
 }
 

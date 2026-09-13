@@ -9,6 +9,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QStandardPaths>
+#include <utils/apppaths.h>
 
 namespace
 {
@@ -17,7 +18,7 @@ constexpr int kSchemaVersion = 1;
 
 QString defaultFilePath()
 {
-    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+    const QString dir = AppPaths::dataRoot();
     return QDir(dir).filePath(QStringLiteral("webdav-profile.json"));
 }
 

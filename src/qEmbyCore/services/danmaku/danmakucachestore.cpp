@@ -11,6 +11,7 @@
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QStandardPaths>
+#include <utils/apppaths.h>
 
 namespace {
 
@@ -538,8 +539,7 @@ void DanmakuCacheStore::clearAll() const
 
 QString DanmakuCacheStore::baseDirPath() const
 {
-    return QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) +
-           QStringLiteral("/danmaku");
+    return AppPaths::dataRoot() + QStringLiteral("/danmaku");
 }
 
 QString DanmakuCacheStore::matchesFilePath(const QString &serverId) const

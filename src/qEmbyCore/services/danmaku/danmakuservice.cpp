@@ -37,6 +37,7 @@
 #include <qcorofuture.h>
 #include <stdexcept>
 #include <utility>
+#include <utils/apppaths.h>
 
 namespace
 {
@@ -86,13 +87,8 @@ QString legacyLocalDanmakuRootPath()
 
 QString preferredLocalDanmakuRootPath()
 {
-    const QString appDir = QDir::cleanPath(QCoreApplication::applicationDirPath());
-    if (appDir.isEmpty())
-    {
-        return legacyLocalDanmakuRootPath();
-    }
-
-    return QDir(appDir).filePath(QStringLiteral("ReEmby-data/danmaku/local"));
+    // 统一到 AppPaths 数据根（便携模式 = <exe>/config/danmaku/local）。
+    return QDir(AppPaths::dataRoot()).filePath(QStringLiteral("danmaku/local"));
 }
 
 QString legacyLocalDanmakuDirectoryPath(QString serverId)

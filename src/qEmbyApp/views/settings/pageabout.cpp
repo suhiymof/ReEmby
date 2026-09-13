@@ -118,8 +118,8 @@ PageAbout::PageAbout(QEmbyCore *core, QWidget *parent) : SettingsPageBase(core, 
     m_mainLayout->addWidget(forkOwnerLabel);
 
     m_linkLabel = new QLabel(this);
-    m_linkLabel->setText(QString("<a href=\"https://github.com/suhiymof/qEmby\">%1</a> &nbsp;|&nbsp; "
-                                 "<a href=\"https://github.com/suhiymof/qEmby/issues\">%2</a>")
+    m_linkLabel->setText(QString("<a href=\"https://github.com/suhiymof/ReEmby\">%1</a> &nbsp;|&nbsp; "
+                                 "<a href=\"https://github.com/suhiymof/ReEmby/issues\">%2</a>")
                              .arg(tr("GitHub Repository"))
                              .arg(tr("Report an Issue")));
     m_linkLabel->setOpenExternalLinks(true);

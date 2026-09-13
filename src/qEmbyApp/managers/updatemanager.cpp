@@ -19,7 +19,7 @@ namespace {
 
 // 更新源：本 fork 自己的 GitHub releases（不再检测上游 AlanHJ/qEmby）。
 const QUrl kLatestReleaseApi(
-    QStringLiteral("https://api.github.com/repos/suhiymof/qEmby/releases/latest"));
+    QStringLiteral("https://api.github.com/repos/suhiymof/ReEmby/releases/latest"));
 
 QString normalizedVersion(QString version)
 {
