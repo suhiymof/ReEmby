@@ -60,6 +60,9 @@ public:
     // 移除一个键（内存缓存 + 磁盘存储）。用于清理已失效的配置，
     // 例如已删除服务器遗留的 per-server 设置。
     void remove(const QString& key);
+    // 按前缀批量移除一组键：匹配 "prefix" 本身及其子键 "prefix/..."。
+    // 用于删除服务器时清理其全部残留 per-server 配置（server/<id>/...）。
+    void removeByPrefix(const QString& prefix);
     void sync();
     QString filePath() const;
     QStringList allKeys() const;

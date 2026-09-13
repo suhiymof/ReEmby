@@ -5,6 +5,7 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <utils/apppaths.h>
+#include <utility>
 
 ConfigStore* ConfigStore::instance() {
     
@@ -190,6 +191,60 @@ void ConfigStore::remove(const QString& key) {
     
     if (hadValue) {
         emit valueChanged(key, QVariant());
+    }
+}
+
+void ConfigStore::removeByPrefix(const QString& prefix) {
+    if (prefix.isEmpty()) {
+        return;
+    }
+    const QString groupPrefix = prefix + QLatin1Char('/');
+    const auto matches = [&prefix, &groupPrefix](const QString& k) {
+        return k == prefix || k.startsWith(groupPrefix);
+    };
+
+    m_mutex.lock();
+
+    QStringList removedKeys;
+
+    
+    for (auto it = m_cache.begin(); it != m_cache.end();) {
+        if (matches(it.key())) {
+            if (!removedKeys.contains(it.key())) {
+                removedKeys.append(it.key());
+            }
+            it = m_cache.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    
+    // 注：此处不能命名 allKeys——会遮蔽同名成员函数 ConfigStore::allKeys()。
+    const QStringList storedKeys = m_settings->allKeys();
+    for (const QString& k : storedKeys) {
+        if (matches(k)) {
+            if (!removedKeys.contains(k)) {
+                removedKeys.append(k);
+            }
+            m_settings->remove(k);
+        }
+    }
+    m_settings->sync();
+    if (m_settings->status() != QSettings::NoError) {
+        qWarning() << "ConfigStore: failed to sync config"
+                   << m_settings->fileName() << "| status:" << m_settings->status();
+    }
+
+    m_mutex.unlock();
+
+    
+    for (const QString& k : std::as_const(removedKeys)) {
+        emit valueChanged(k, QVariant());
+    }
+    if (!removedKeys.isEmpty()) {
+        qInfo() << "ConfigStore: removed" << removedKeys.size()
+                << "key(s) under" << prefix;
     }
 }
 
