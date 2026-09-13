@@ -1,4 +1,5 @@
 #include "pagelibrary.h"
+#include "../../components/aggregateserversdialog.h"
 #include "../../components/dashboardsectionorderwidget.h"
 #include "../../components/modernnumberinput.h"
 #include "../../components/moderntoast.h"
@@ -232,6 +233,33 @@ PageLibrary::PageLibrary(QEmbyCore *core, QWidget *parent)
   
   
   
+  // —— 聚合设置：选择哪些服务器参与聚合搜索 / 聚合历史 / 聚合收藏 ——
+  auto *aggregateTitle = new QLabel(tr("Aggregation"), this);
+  aggregateTitle->setObjectName("SettingsSubTitle");
+  m_mainLayout->addWidget(aggregateTitle);
+
+  {
+    auto *aggregateBtn = new QPushButton(tr("Configure"), this);
+    aggregateBtn->setObjectName("SettingsCardButton");
+    aggregateBtn->setCursor(Qt::PointingHandCursor);
+    auto *aggregateWidget = new QWidget(this);
+    auto *aggregateLayout = new QHBoxLayout(aggregateWidget);
+    aggregateLayout->setContentsMargins(0, 0, 0, 0);
+    aggregateLayout->addWidget(aggregateBtn);
+    aggregateLayout->addStretch();
+
+    connect(aggregateBtn, &QPushButton::clicked, this, [this]() {
+      AggregateServersDialog dialog(m_core, this);
+      dialog.exec();
+    });
+
+    m_mainLayout->addWidget(new SettingsCard(
+        ":/svg/dark/server.svg", tr("Services in Aggregation"),
+        tr("Choose which servers take part in aggregated search, history and "
+           "favorites"),
+        aggregateWidget, QString(), this));
+  }
+
   auto *cacheTitle = new QLabel(tr("Cache Management"), this);
   cacheTitle->setObjectName("SettingsSubTitle");
   m_mainLayout->addWidget(cacheTitle);

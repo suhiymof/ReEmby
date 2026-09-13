@@ -1,5 +1,7 @@
 #include "searchaggregator.h"
 #include "../../api/apiclient.h"
+#include "../../config/config_keys.h"
+#include "../../config/configstore.h"
 #include "../manager/servermanager.h"
 #include <qcorotask.h>
 #include <qcoronetwork.h>
@@ -102,7 +104,21 @@ void SearchAggregator::fanOut(const QString& pathTemplate,
         return;
     }
 
-    const QList<ServerProfile> servers = m_serverManager->servers();
+    // 只把「有效且参与聚合」的服务器纳入 fan-out（设置 → 媒体库 →
+    // 参与聚合的服务）。total 与实际发起的协程数保持一致，保证
+    // completed/total 配平、onComplete 正常触发。
+    QList<ServerProfile> servers;
+    for (const ServerProfile& profile : m_serverManager->servers()) {
+        if (!profile.isValid()) {
+            continue;
+        }
+        if (!ConfigStore::instance()->get<bool>(
+                ConfigKeys::forServer(profile.id, ConfigKeys::AggregateEnabled),
+                true)) {
+            continue;
+        }
+        servers.append(profile);
+    }
     if (servers.isEmpty()) {
         if (onComplete) onComplete(0, 0);
         return;

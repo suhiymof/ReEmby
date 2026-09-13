@@ -2792,6 +2792,22 @@ This will remove the current log and rotated backups. This action cannot be undo
         <source>Image cache cleared</source>
         <translation>图片缓存已清理</translation>
     </message>
+    <message>
+        <source>Aggregation</source>
+        <translation>聚合</translation>
+    </message>
+    <message>
+        <source>Configure</source>
+        <translation>配置</translation>
+    </message>
+    <message>
+        <source>Services in Aggregation</source>
+        <translation>参与聚合的服务</translation>
+    </message>
+    <message>
+        <source>Choose which servers take part in aggregated search, history and favorites</source>
+        <translation>选择哪些服务器参与聚合搜索、聚合历史与聚合收藏</translation>
+    </message>
 </context>
 
 <context>
@@ -10494,6 +10510,32 @@ This cannot be undone.</source>
     <message>
         <source>Save</source>
         <translation>保存</translation>
+    </message>
+</context>
+<context>
+    <name>AggregateServersDialog</name>
+    <message>
+        <source>Services in Aggregation</source>
+        <translation>参与聚合的服务</translation>
+    </message>
+    <message>
+        <source>Choose which servers take part in aggregated search, history and favorites.</source>
+        <translation>选择哪些服务器参与聚合搜索、聚合历史与聚合收藏。</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>取消</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>保存</translation>
+    </message>
+</context>
+<context>
+    <name>AggregatedServerSection</name>
+    <message>
+        <source>(%1)</source>
+        <translation>(%1)</translation>
     </message>
 </context>
 </TS>

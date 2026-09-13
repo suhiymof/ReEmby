@@ -5,6 +5,7 @@
 #include <services/aggregator/searchaggregator.h>
 #include <services/manager/servermanager.h>
 #include <config/config_keys.h>
+#include <config/configstore.h>
 #include <QScrollArea>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -16,6 +17,20 @@
 #include <QToolButton>
 #include <QFrame>
 #include <utility>
+
+namespace {
+
+// 该服务器是否参与聚合（设置 → 媒体库 → 参与聚合的服务）。
+// 无键 = true（默认全部参与，与历史行为一致）；服务器被删除后清理见
+// ServerManager::removeServer。
+bool isAggregateEnabled(const ServerProfile& profile)
+{
+    if (!profile.isValid()) return false;
+    return ConfigStore::instance()->get<bool>(
+        ConfigKeys::forServer(profile.id, ConfigKeys::AggregateEnabled), true);
+}
+
+} // namespace
 
 // ============================ AggregatedServerSection ============================
 
@@ -233,7 +248,7 @@ void AggregatedViewBase::createSkeletonSections()
     // 相同列表时仅重置为加载中态。
     QStringList currentIds;
     for (const ServerProfile& profile : servers) {
-        if (profile.isValid()) currentIds.append(profile.id);
+        if (isAggregateEnabled(profile)) currentIds.append(profile.id);
     }
     QStringList existingIds;
     for (const AggregatedServerSection* section : std::as_const(m_sections)) {
@@ -242,7 +257,7 @@ void AggregatedViewBase::createSkeletonSections()
     if (existingIds != currentIds) {
         clearSections();
         for (const ServerProfile& profile : servers) {
-            if (!profile.isValid()) continue;
+            if (!isAggregateEnabled(profile)) continue;
             auto* section = new AggregatedServerSection(m_core, profile, this);
             connect(section, &AggregatedServerSection::sectionClicked, this,
                     [this](const ServerProfile& p) {

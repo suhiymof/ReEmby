@@ -1,5 +1,7 @@
 #include "servermanager.h"
 #include "../../api/embywebsocket.h"
+#include "../../config/config_keys.h"
+#include "../../config/configstore.h"
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QFile>
@@ -33,6 +35,12 @@ void ServerManager::removeServer(const QString& id) {
         if (m_servers[i].id == id) {
             
             m_servers.removeAt(i);
+
+            // 清理该服务器残留的 per-server 配置：聚合参与开关
+            // （"参与聚合的服务"设置；ConfigStore 无删除 API，写 false
+            // 与清理等效——删除的服务器不再参与聚合）。
+            ConfigStore::instance()->set(
+                ConfigKeys::forServer(id, ConfigKeys::AggregateEnabled), false);
 
             
             saveSettings();

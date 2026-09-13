@@ -100,6 +100,10 @@ constexpr const char* ShimmerAnimation = "library/shimmer_animation";
 constexpr const char* AdaptiveImages = "library/adaptive_images";
 constexpr const char* ShowMediaTooltips = "library/show_media_tooltips";
 
+// 该服务器是否参与聚合（聚合搜索 / 聚合历史 / 聚合收藏）。
+// per-server 键：server/<id>/aggregate_enabled；无键 = true（默认参与）。
+constexpr const char* AggregateEnabled = "aggregate_enabled";
+
 
 constexpr const char* LibrarySortIndex = "sort/index";
 constexpr const char* LibrarySortDescending = "sort/descending";
