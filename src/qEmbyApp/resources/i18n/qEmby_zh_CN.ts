@@ -2141,6 +2141,10 @@ Continue from there?</source>
         <translation> 媒体库</translation>
     </message>
     <message>
+        <source> Trakt</source>
+        <translation> Trakt</translation>
+    </message>
+    <message>
         <source> About</source>
         <translation> 关于</translation>
     </message>

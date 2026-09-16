@@ -315,7 +315,8 @@ PagePlayer::PagePlayer(QEmbyCore *core, QWidget *parent)
 
   addAdvancedSpin(tr("Stream Buffer I/O Size (KiB)"),
                   tr("Size of the network stream I/O buffer"),
-                  ConfigKeys::PlayerStreamBufferSize, 16, 4096, 128, QString());
+                  ConfigKeys::PlayerStreamBufferSize, 16, 262144, 128,
+                  QString());
   addAdvancedSpin(tr("Max Buffer Size (MiB)"),
                   tr("Maximum demuxer read-ahead buffer"),
                   ConfigKeys::PlayerDemuxerMaxBytes, 128, 16384, 1536, QString());
@@ -324,7 +325,7 @@ PagePlayer::PagePlayer(QEmbyCore *core, QWidget *parent)
                   ConfigKeys::PlayerDemuxerMaxBackBytes, 0, 8192, 0, QString());
   addAdvancedSpin(tr("Buffer Read-Ahead (seconds)"),
                   tr("How much media is read ahead in seconds"),
-                  ConfigKeys::PlayerDemuxerReadaheadSecs, 1, 600, 1, QString());
+                  ConfigKeys::PlayerDemuxerReadaheadSecs, 1, 3600, 1, QString());
 
   
   auto *longPressSwitch = new ModernSwitch(this);

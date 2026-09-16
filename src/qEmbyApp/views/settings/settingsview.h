@@ -2,6 +2,7 @@
 #define SETTINGSVIEW_H
 
 #include "../baseview.h"
+#include <QHideEvent>
 #include <QLabel>
 #include <QList>
 #include <QListWidget>
@@ -21,6 +22,9 @@ public:
 protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
 
+    /// 离开设置页时保存当前页签与滚动位置（下次进入时恢复）
+    void hideEvent(QHideEvent* event) override;
+
 private:
     void setupUi();
     void setupConnections();
@@ -32,6 +36,11 @@ private:
     
     
     QScrollArea* wrapInScrollArea(QWidget* page, int row);
+
+    /// 记住/恢复上次停留的页签与该页签的滚动位置
+    void restoreNavigationState();
+    void saveNavigationState();
+    void applyPendingScroll();
 
 private slots:
     
@@ -50,7 +59,13 @@ private:
     QList<int>                 m_scrollTargets;
 
     
+    
     QList<QPointer<QWidget>>   m_pages;
+
+    /// 恢复滚动位置时目标页可能刚被懒加载、布局尚未完成（maximum 仍为 0），需重试等待
+    int m_pendingScrollRow     = -1;
+    int m_pendingScrollPos     = 0;
+    int m_pendingScrollRetries = 0;
 };
 
 #endif 

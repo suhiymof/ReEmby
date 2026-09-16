@@ -75,6 +75,9 @@ constexpr const char* SidebarHideFavorites = "appearance/sidebar_hide_favorites"
 constexpr const char* StartupWindowState = "appearance/startup_window_state";
 constexpr const char* UiAnimations = "appearance/ui_animations";
 constexpr const char* SnapshotNavigation = "appearance/snapshot_navigation";
+// 设置页导航记忆：上次离开设置页时停留的页签与该页签的纵向滚动位置
+constexpr const char* SettingsLastTab = "appearance/settings_last_tab";       // int, 页签索引
+constexpr const char* SettingsLastScroll = "appearance/settings_last_scroll"; // int, 纵向滚动值
 constexpr const char* SearchHistoryEnabled = "appearance/search_history_enabled";
 constexpr const char* SearchAutocompleteEnabled = "appearance/search_autocomplete_enabled";
 constexpr const char* ShowRecommended = "library/show_recommended";

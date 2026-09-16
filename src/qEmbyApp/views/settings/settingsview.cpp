@@ -9,7 +9,10 @@
 #include "pageplayer.h"
 #include "pagelibrary.h"
 #include "pagetrakt.h"
+#include "config/config_keys.h"
+#include "config/configstore.h"
 #include <QApplication>
+#include <QTimer>
 #include <QEvent>
 #include <QHBoxLayout>
 #include <QScrollArea>
@@ -29,7 +32,8 @@ SettingsView::SettingsView(QEmbyCore *core, QWidget *parent)
 
   
   
-  m_navMenu->setCurrentRow(0);
+  // 恢复上次离开设置页时停留的页签与滚动位置（无记录时落在第 0 页）
+  restoreNavigationState();
 }
 
 void SettingsView::setupUi() {
@@ -302,4 +306,65 @@ bool SettingsView::eventFilter(QObject *obj, QEvent *event) {
   }
 
   return QWidget::eventFilter(obj, event);
+}
+
+void SettingsView::hideEvent(QHideEvent *event) {
+  // 离开设置页（切回主界面）时记下当前位置
+  saveNavigationState();
+  BaseView::hideEvent(event);
+}
+
+void SettingsView::restoreNavigationState() {
+  auto *cfg = ConfigStore::instance();
+  const int savedRow = cfg->get<int>(ConfigKeys::SettingsLastTab, 0);
+  const int targetRow =
+      (savedRow >= 0 && savedRow < m_navMenu->count()) ? savedRow : 0;
+  m_navMenu->setCurrentRow(targetRow);  // 触发 ensurePageAt + 切页
+
+  const int savedPos = cfg->get<int>(ConfigKeys::SettingsLastScroll, 0);
+  if (savedPos <= 0) {
+    return;
+  }
+  m_pendingScrollRow     = targetRow;
+  m_pendingScrollPos     = savedPos;
+  m_pendingScrollRetries = 8;
+  // 页面是懒加载的，构造当下布局还没跑完，滚动条 maximum 仍为 0
+  QTimer::singleShot(0, this, [this]() { applyPendingScroll(); });
+}
+
+void SettingsView::saveNavigationState() {
+  auto *cfg = ConfigStore::instance();
+  const int navRow = m_navMenu ? m_navMenu->currentRow() : -1;
+  if (navRow < 0) {
+    return;
+  }
+  cfg->set(ConfigKeys::SettingsLastTab, navRow);
+  if (navRow < m_scrollAreas.size() && m_scrollAreas[navRow]) {
+    cfg->set(ConfigKeys::SettingsLastScroll,
+             m_scrollAreas[navRow]->verticalScrollBar()->value());
+  }
+}
+
+void SettingsView::applyPendingScroll() {
+  if (m_pendingScrollRow < 0 || m_pendingScrollRow >= m_scrollAreas.size()) {
+    m_pendingScrollRow = -1;
+    return;
+  }
+  QScrollArea *area = m_scrollAreas[m_pendingScrollRow];
+  if (!area) {
+    m_pendingScrollRow = -1;
+    return;
+  }
+  QScrollBar *bar = area->verticalScrollBar();
+  if (!bar) {
+    m_pendingScrollRow = -1;
+    return;
+  }
+  // 布局尚未完成时 maximum 还不够大，等它涨上来再设置（最多重试几次）
+  if (bar->maximum() < m_pendingScrollPos && m_pendingScrollRetries-- > 0) {
+    QTimer::singleShot(50, this, [this]() { applyPendingScroll(); });
+    return;
+  }
+  bar->setValue(qMin(m_pendingScrollPos, bar->maximum()));
+  m_pendingScrollRow = -1;
 }
