@@ -186,15 +186,17 @@ PagePlayer::PagePlayer(QEmbyCore *core, QWidget *parent)
         prefetchWidget, QString(), this));
   }
 
-  // Disk-backed streaming cache: keeps the last-played media's cache files
-  // so revisiting it can reuse them; the cache is flushed (cache-free)
-  // before each new file loads to avoid stale data across media.
+  // Disk-backed demuxer cache: mpv writes the cache's packet data to disk
+  // instead of RAM, which is what makes a very large buffer size affordable
+  // on a machine with limited memory. Cache files are deleted as soon as the
+  // media is unloaded, so this does not speed up replaying the same media,
+  // and no manual flush is needed when switching media.
   {
     auto *diskCacheSwitch = new ModernSwitch(this);
     m_mainLayout->addWidget(new SettingsCard(
         ":/svg/dark/hw-decode.svg", tr("Disk Cache"),
-        tr("Keep stream cache on disk so revisiting the same media is "
-           "faster; cache is cleared automatically when switching media"),
+        tr("Write cache data to disk instead of memory, so a large buffer "
+           "size can be used even with limited RAM"),
         diskCacheSwitch, ConfigKeys::PlayerDiskCache, this, QVariant(false)));
 
     auto *cacheDirRow = new QWidget(this);

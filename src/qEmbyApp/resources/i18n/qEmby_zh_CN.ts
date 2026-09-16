@@ -3494,8 +3494,8 @@ This action cannot be undone.</source>
         <translation>磁盘缓存</translation>
     </message>
     <message>
-        <source>Keep stream cache on disk so revisiting the same media is faster; cache is cleared automatically when switching media</source>
-        <translation>将流缓存保留在磁盘上，再次播放同一媒体时启动更快；切换媒体时自动清除缓存</translation>
+        <source>Write cache data to disk instead of memory, so a large buffer size can be used even with limited RAM</source>
+        <translation>把缓存数据写入磁盘而非内存，内存有限时也能使用很大的缓冲</translation>
     </message>
     <message>
         <source>Cache directory (default: system temp)</source>

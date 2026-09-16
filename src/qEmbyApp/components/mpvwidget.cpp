@@ -381,11 +381,15 @@ void MpvWidget::loadMediaNow(const QString &url, const QString &serverId, bool w
                                   fastStart ? 0.2 : 1.0);
     }
 
-    // Disk-backed streaming cache + switch-time cleanup:
-    //  - when enabled, mpv keeps stream cache files on disk (cache-dir), so
-    //    revisiting the same media can reuse them;
-    //  - before loading a new file the old cache is flushed (cache-free) so
-    //    stale data from the previous media never leaks into the new one.
+    // Disk-backed demuxer cache (Settings -> Player -> "Disk Cache"):
+    //  - when enabled, mpv writes the cache's packet data to disk instead of
+    //    RAM (--cache-on-disk), which is what makes a very large
+    //    demuxer-max-bytes affordable without the same cost in memory; the
+    //    target directory comes from --demuxer-cache-dir. Cache files are
+    //    deleted when the media is unloaded, so this is NOT a persistent
+    //    cache and does not make replaying the same media start faster;
+    //  - no manual flush is needed when switching media: the cache lives and
+    //    dies with the demuxer, so loading a new file always starts clean.
     {
         const bool diskCache = ConfigStore::instance()->get<bool>(
             ConfigKeys::PlayerDiskCache, false);
@@ -396,14 +400,13 @@ void MpvWidget::loadMediaNow(const QString &url, const QString &serverId, bool w
                 ConfigKeys::PlayerDiskCacheDir, QString());
             if (!cacheDir.isEmpty()) {
                 QDir().mkpath(cacheDir);
-                m_controller->setProperty(QStringLiteral("cache-dir"), cacheDir);
+                m_controller->setProperty(QStringLiteral("demuxer-cache-dir"),
+                                          cacheDir);
             }
         } else {
             m_controller->setProperty(QStringLiteral("cache-on-disk"),
                                       QStringLiteral("no"));
         }
-        // Flush the previous media's cache before opening the new one.
-        m_controller->command(QVariantList{QStringLiteral("cache-free")});
     }
 
     // Advanced mpv tuning (Settings -> Player). All values come from the
