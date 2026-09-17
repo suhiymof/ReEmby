@@ -30,7 +30,7 @@ constexpr qint64 kSocketQueuedBytesHighWater = 4 * 1024 * 1024;
 // 1.8 ms because the relay shares ReEmby's main thread with rendering, danmaku
 // and UI work. One round trip per connection is the goal, so this is sized to
 // swallow a typical request whole.
-constexpr qint64 kCacheSocketHighWaterBytes = 512 * 1024;
+constexpr qint64 kCacheSocketHighWaterBytes = 2 * 1024 * 1024;
 constexpr qint64 kRelayPumpChunkBytes = 256 * 1024;
 // One aggregate log line per this many client connections, so a playing media
 // does not produce tens of thousands of lines.
@@ -1079,6 +1079,7 @@ void MpvHttpStreamRelay::resolveRedirectStep(const QUrl &url, int depth)
                 const int statusCode = probe->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
                 const QByteArray location = probe->rawHeader("Location");
                 const QUrl probeUrl = probe->request().url();
+                const QString probeErrorText = probe->errorString();
                 m_redirectProbe = nullptr;
                 probe->deleteLater();
 
@@ -1099,7 +1100,15 @@ void MpvHttpStreamRelay::resolveRedirectStep(const QUrl &url, int depth)
                     qInfo() << "[MpvHttpStreamRelay] redirect chain pre-resolved"
                             << "| hops:" << depth
                             << "| to:" << LogRedactionUtils::url(m_redirectTarget);
+                    return;
                 }
+
+                // Worth knowing about: without this the warm-up can fail silently
+                // and the first request pays the whole chain again.
+                qWarning() << "[MpvHttpStreamRelay] redirect pre-resolve failed"
+                           << "| url:" << LogRedactionUtils::url(probeUrl)
+                           << "| status:" << statusCode
+                           << "| error:" << probeErrorText;
             });
 }
 
