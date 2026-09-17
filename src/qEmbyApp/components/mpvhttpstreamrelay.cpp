@@ -4,6 +4,7 @@
 
 #include <QAbstractSocket>
 #include <QDebug>
+#include <QElapsedTimer>
 #include <QHostAddress>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -46,6 +47,17 @@ constexpr int kMaxRedirects = 5;
 bool canWriteToSocket(QTcpSocket *socket)
 {
     return socket && socket->isOpen() && socket->isWritable() && socket->state() != QAbstractSocket::UnconnectedState;
+}
+
+// Monotonic clock shared by the per-connection diagnostics.
+qint64 monotonicNs()
+{
+    static QElapsedTimer clock;
+    if (!clock.isValid())
+    {
+        clock.start();
+    }
+    return clock.nsecsElapsed();
 }
 
 } // namespace
@@ -114,6 +126,10 @@ QUrl MpvHttpStreamRelay::prepare(const QUrl &targetUrl, const QString &serverId,
 
 void MpvHttpStreamRelay::stop()
 {
+    if (m_statConnections > 0)
+    {
+        logActivitySummary();
+    }
     const auto sockets = m_connections.keys();
     for (QTcpSocket *socket : sockets)
     {
@@ -142,7 +158,8 @@ void MpvHttpStreamRelay::onNewConnection()
 {
     while (QTcpSocket *socket = m_server->nextPendingConnection())
     {
-        m_connections.insert(socket, ConnectionState{});
+        auto inserted = m_connections.insert(socket, ConnectionState{});
+        inserted->acceptedNs = monotonicNs();
         QPointer<QTcpSocket> safeSocket(socket);
         connect(socket, &QTcpSocket::readyRead, this,
                 [this, safeSocket]()
@@ -299,6 +316,7 @@ void MpvHttpStreamRelay::processRequest(QTcpSocket *socket, const QByteArray &re
         it->reqEnd = end;
         it->needPos = begin;
         it->servedFromCache = 0;
+        it->requestNs = monotonicNs();
 
         ++m_statCacheRequests;
         if (m_statCacheRequests == 1 || m_statCacheRequests % 500 == 0)
@@ -548,6 +566,12 @@ void MpvHttpStreamRelay::resetCache()
     m_statConnections = 0;
     m_statBytesFromCache = 0;
     m_statBytesFromUpstream = 0;
+    m_statTimedConnections = 0;
+    m_statAcceptToRequestNs = 0;
+    m_statRequestToHeadersNs = 0;
+    m_statHeadersToDoneNs = 0;
+    m_statPumpWrites = 0;
+    m_statDiscardedBytes = 0;
 }
 
 void MpvHttpStreamRelay::recountCachedBytes()
@@ -725,6 +749,7 @@ void MpvHttpStreamRelay::sendCacheHeaders(QTcpSocket *socket)
     if (socket->write(response) >= 0)
     {
         it->headersSent = true;
+        it->headersNs = monotonicNs();
     }
 }
 
@@ -804,6 +829,8 @@ void MpvHttpStreamRelay::pumpCacheToSocket(QTcpSocket *socket)
         }
         it->needPos += written;
         it->servedFromCache += written;
+        it->writtenBytes += written;
+        ++it->pumpWrites;
 
         // Keep the upstream read ahead of an actively consuming client so a
         // sequential read never has to restart the transfer.
@@ -1343,6 +1370,14 @@ void MpvHttpStreamRelay::closeConnection(QTcpSocket *socket)
     {
         QNetworkReply *reply = it->reply;
         const bool wasCacheMode = it->cacheMode;
+        // Snapshot the diagnostics while the entry is still alive.
+        const qint64 acceptedNs = it->acceptedNs;
+        const qint64 requestNs = it->requestNs;
+        const qint64 headersNs = it->headersNs;
+        const qint64 pumpWrites = it->pumpWrites;
+        // Anything still queued for the socket at this point is data mpv never
+        // read: it was written and counted, then dropped when the socket died.
+        const qint64 pendingBytes = socket->bytesToWrite();
         it->reply = nullptr;
         m_connections.erase(it);
 
@@ -1361,20 +1396,27 @@ void MpvHttpStreamRelay::closeConnection(QTcpSocket *socket)
             // One aggregate line every kConnectionLogInterval connections: a
             // non-interleaved audio track opens tens of connections per second,
             // so a line per connection buries the rest of the log.
-            // avgBytesPerConnection is the number to watch -- it should stay
-            // close to kCacheSocketHighWaterBytes, not in the megabytes.
+            // The three stage timings say where a connection's life goes:
+            // accept->request (mpv was slow to send), request->headers (this
+            // class was slow to answer) and headers->done (mpv consumed, or
+            // walked away mid-transfer).
             ++m_statConnections;
+            if (requestNs > 0 && acceptedNs > 0)
+            {
+                ++m_statTimedConnections;
+                m_statAcceptToRequestNs += requestNs - acceptedNs;
+                if (headersNs > 0)
+                {
+                    m_statRequestToHeadersNs += headersNs - requestNs;
+                    m_statHeadersToDoneNs += monotonicNs() - headersNs;
+                }
+            }
+            m_statPumpWrites += pumpWrites;
+            m_statDiscardedBytes += pendingBytes;
+
             if (m_statConnections % kConnectionLogInterval == 0)
             {
-                const qint64 perConnection =
-                    m_statBytesFromCache / qMax<qint64>(1, m_statConnections);
-                qDebug() << "[MpvHttpStreamRelay] cache activity"
-                         << "| connections:" << m_statConnections
-                         << "| avgBytesPerConnection:" << perConnection
-                         << "| cachedBytes:" << m_cachedBytes
-                         << "| fetches:" << m_statFetches
-                         << "| bytesFromCache:" << m_statBytesFromCache
-                         << "| bytesFromUpstream:" << m_statBytesFromUpstream;
+                logActivitySummary();
             }
         }
     }
@@ -1393,6 +1435,27 @@ void MpvHttpStreamRelay::recordRelayedBytes(qint64 bytes)
     {
         m_bytesRelayedSinceLastTick += bytes;
     }
+}
+
+// One-line report of cache activity. Emitted every kConnectionLogInterval
+// connections and once more when the media is torn down, so even a short
+// playback ends with a complete summary.
+void MpvHttpStreamRelay::logActivitySummary()
+{
+    const qint64 connections = qMax<qint64>(1, m_statConnections);
+    const qint64 timed = qMax<qint64>(1, m_statTimedConnections);
+    qDebug() << "[MpvHttpStreamRelay] cache activity"
+             << "| connections:" << m_statConnections
+             << "| avgBytesPerConnection:" << (m_statBytesFromCache / connections)
+             << "| discardedBytes:" << m_statDiscardedBytes
+             << "| avgPumpWrites:" << (m_statPumpWrites / connections)
+             << "| acceptToRequestUs:" << (m_statAcceptToRequestNs / timed / 1000)
+             << "| requestToHeadersUs:" << (m_statRequestToHeadersNs / timed / 1000)
+             << "| headersToDoneUs:" << (m_statHeadersToDoneNs / timed / 1000)
+             << "| cachedBytes:" << m_cachedBytes
+             << "| fetches:" << m_statFetches
+             << "| bytesFromCache:" << m_statBytesFromCache
+             << "| bytesFromUpstream:" << m_statBytesFromUpstream;
 }
 
 bool MpvHttpStreamRelay::parseRangeHeader(const QByteArray &value, qint64 *begin, qint64 *end) const

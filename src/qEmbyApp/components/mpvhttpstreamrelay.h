@@ -76,6 +76,14 @@ private:
         qint64 servedFromCache = 0;
         QByteArray originalRange;
         QByteArray originalAccept;
+
+        // Per-connection diagnostics: where the time goes, and how much of what
+        // was written mpv actually read (the rest is dropped when it closes).
+        qint64 acceptedNs = 0;
+        qint64 requestNs = 0;
+        qint64 headersNs = 0;
+        qint64 writtenBytes = 0;
+        int pumpWrites = 0;
     };
 
     void onNewConnection();
@@ -118,6 +126,7 @@ private:
     void writeError(QTcpSocket *socket, int statusCode, const QByteArray &message);
     void closeConnection(QTcpSocket *socket);
     void recordRelayedBytes(qint64 bytes);
+    void logActivitySummary();
 
     bool parseRangeHeader(const QByteArray &value, qint64 *begin, qint64 *end) const;
     static QByteArray reasonPhrase(int statusCode);
@@ -169,6 +178,13 @@ private:
     qint64 m_statConnections = 0;
     qint64 m_statBytesFromCache = 0;
     qint64 m_statBytesFromUpstream = 0;
+    // Per-connection timing (nanoseconds, summed) and volume breakdown.
+    qint64 m_statTimedConnections = 0;
+    qint64 m_statAcceptToRequestNs = 0;
+    qint64 m_statRequestToHeadersNs = 0;
+    qint64 m_statHeadersToDoneNs = 0;
+    qint64 m_statPumpWrites = 0;
+    qint64 m_statDiscardedBytes = 0; // written into the socket, dropped at close
 };
 
 #endif
