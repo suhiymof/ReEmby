@@ -46,6 +46,9 @@ constexpr qint64 kFetchLimitLowWaterBytes = 8 * 1024 * 1024;
 // The Emby -> OpenList -> object-storage chain uses two hops; allow a few more
 // before giving up on a redirect loop.
 constexpr int kMaxRedirects = 5;
+// A stalled hop would otherwise hang the warm-up probe for the whole session,
+// leaving it to die silently when the media is closed.
+constexpr int kRedirectProbeTimeoutMs = 8000;
 
 bool canWriteToSocket(QTcpSocket *socket)
 {
@@ -109,6 +112,8 @@ QUrl MpvHttpStreamRelay::prepare(const QUrl &targetUrl, const QString &serverId,
     m_network->setProxy(proxy);
     m_bytesRelayedSinceLastTick = 0;
     m_readaheadBytes = readaheadBytes > 0 ? readaheadBytes : kDefaultReadaheadBytes;
+    m_preparedNs = monotonicNs();
+    m_firstByteLogged = false;
     resetCache();
     m_speedTimer->start();
 
@@ -1083,14 +1088,23 @@ void MpvHttpStreamRelay::resolveRedirectStep(const QUrl &url, int depth)
                 m_redirectProbe = nullptr;
                 probe->deleteLater();
 
-                if (statusCode >= 300 && statusCode < 400 && !location.isEmpty())
+                if (statusCode >= 300 && statusCode < 400)
                 {
                     const QUrl next = probeUrl.resolved(QUrl::fromEncoded(location));
-                    if (next.isValid() && !next.scheme().isEmpty())
+                    if (!location.isEmpty() && next.isValid() && !next.scheme().isEmpty())
                     {
+                        qInfo() << "[MpvHttpStreamRelay] pre-resolve hop"
+                                << "| depth:" << depth << "| status:" << statusCode
+                                << "| to:" << LogRedactionUtils::url(next);
                         resolveRedirectStep(next, depth + 1);
                         return;
                     }
+                    // A redirect without a usable Location is a dead end; say so
+                    // instead of dropping out of the warm-up without a trace.
+                    qWarning() << "[MpvHttpStreamRelay] pre-resolve hop has no usable Location"
+                               << "| depth:" << depth << "| status:" << statusCode
+                               << "| location:" << location;
+                    return;
                 }
 
                 if (statusCode == 206 || statusCode == 200)
@@ -1248,6 +1262,14 @@ void MpvHttpStreamRelay::parseFetchHeaders()
         }
     }
 
+    if (!m_firstByteLogged && m_preparedNs > 0)
+    {
+        // Everything before this point is time mpv spends waiting with nothing
+        // to decode, so it is the number that explains a slow start-up.
+        m_firstByteLogged = true;
+        qInfo() << "[MpvHttpStreamRelay] first upstream byte"
+                << "| after:" << ((monotonicNs() - m_preparedNs) / 1000000) << "ms";
+    }
     qInfo() << "[MpvHttpStreamRelay] upstream ready"
             << "| status:" << statusCode << "| totalSize:" << m_totalSize
             << "| contentRange:" << contentRange
