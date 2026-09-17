@@ -302,8 +302,6 @@ void MpvHttpStreamRelay::processRequest(QTcpSocket *socket, const QByteArray &re
     }
     const bool headOnly = method == "HEAD";
     it->headOnly = headOnly;
-    it->originalRange = rangeHeader;
-    it->originalAccept = acceptHeader;
 
     qint64 begin = 0;
     qint64 end = -1;
@@ -333,6 +331,23 @@ void MpvHttpStreamRelay::processRequest(QTcpSocket *socket, const QByteArray &re
         {
             ensureFetchFrom(it->needPos);
         }
+        return;
+    }
+
+    // The relay cannot serve this media itself (the upstream refused Range, or
+    // its reads kept failing). Rather than proxy the request -- which could then
+    // fail on our own account -- hand mpv the original URL and step aside.
+    if (m_rangeUnsupported && !headOnly && !m_targetUrl.isEmpty())
+    {
+        ++m_statRedirects;
+        qInfo() << "[MpvHttpStreamRelay] handing the client back to the upstream url"
+                << "| range:" << rangeHeader;
+        it = m_connections.find(socket);
+        if (it != m_connections.end())
+        {
+            it->finished = true;
+        }
+        writeRedirect(socket, m_targetUrl);
         return;
     }
 
@@ -572,6 +587,7 @@ void MpvHttpStreamRelay::resetCache()
     m_statHeadersToDoneNs = 0;
     m_statPumpWrites = 0;
     m_statDiscardedBytes = 0;
+    m_statRedirects = 0;
 }
 
 void MpvHttpStreamRelay::recountCachedBytes()
@@ -1106,7 +1122,7 @@ void MpvHttpStreamRelay::parseFetchHeaders()
                            [this]()
                            {
                                releaseFetch();
-                               demoteToPassThrough();
+                               redirectClientsUpstream();
                            });
         return;
     }
@@ -1316,7 +1332,12 @@ void MpvHttpStreamRelay::releaseFetch()
     reply->deleteLater();
 }
 
-void MpvHttpStreamRelay::demoteToPassThrough()
+// Hand every pending client back to the original upstream URL instead of
+// proxying for them. mpv follows redirects on its own, so from this point on it
+// talks to the server directly -- exactly what it would have done with no relay
+// at all. That is deliberate: the relay must never be the reason a media that
+// was playable stops playing, whatever goes wrong on its own side.
+void MpvHttpStreamRelay::redirectClientsUpstream()
 {
     const auto sockets = m_connections.keys();
     for (QTcpSocket *socket : sockets)
@@ -1327,8 +1348,34 @@ void MpvHttpStreamRelay::demoteToPassThrough()
             continue;
         }
         it->cacheMode = false;
-        it->needPos = it->reqBegin;
-        startPassThrough(socket, it->originalRange, it->originalAccept, it->headOnly);
+        it->finished = true;
+        ++m_statRedirects;
+        writeRedirect(socket, m_targetUrl);
+    }
+}
+
+void MpvHttpStreamRelay::writeRedirect(QTcpSocket *socket, const QUrl &target)
+{
+    if (!socket || target.isEmpty())
+    {
+        closeConnection(socket);
+        return;
+    }
+
+    QByteArray response = "HTTP/1.1 302 Found\r\n";
+    response += "Location: " + target.toString(QUrl::FullyEncoded).toUtf8() + "\r\n";
+    response += "Content-Length: 0\r\n";
+    response += "Connection: close\r\n";
+    response += "\r\n";
+
+    if (canWriteToSocket(socket))
+    {
+        socket->write(response);
+        socket->disconnectFromHost();
+    }
+    else
+    {
+        closeConnection(socket);
     }
 }
 
@@ -1453,6 +1500,7 @@ void MpvHttpStreamRelay::logActivitySummary()
              << "| requestToHeadersUs:" << (m_statRequestToHeadersNs / timed / 1000)
              << "| headersToDoneUs:" << (m_statHeadersToDoneNs / timed / 1000)
              << "| cachedBytes:" << m_cachedBytes
+             << "| redirects:" << m_statRedirects
              << "| fetches:" << m_statFetches
              << "| bytesFromCache:" << m_statBytesFromCache
              << "| bytesFromUpstream:" << m_statBytesFromUpstream;

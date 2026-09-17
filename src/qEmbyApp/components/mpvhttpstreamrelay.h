@@ -74,8 +74,6 @@ private:
         qint64 reqEnd = -1;        // inclusive; -1 = open ended (through EOF)
         qint64 needPos = 0;        // next absolute offset still to be sent
         qint64 servedFromCache = 0;
-        QByteArray originalRange;
-        QByteArray originalAccept;
 
         // Per-connection diagnostics: where the time goes, and how much of what
         // was written mpv actually read (the rest is dropped when it closes).
@@ -121,7 +119,8 @@ private:
     void onFetchReadyRead();
     void onFetchFinished();
     void releaseFetch();
-    void demoteToPassThrough();
+    void redirectClientsUpstream();
+    void writeRedirect(QTcpSocket *socket, const QUrl &target);
 
     void writeError(QTcpSocket *socket, int statusCode, const QByteArray &message);
     void closeConnection(QTcpSocket *socket);
@@ -185,6 +184,7 @@ private:
     qint64 m_statHeadersToDoneNs = 0;
     qint64 m_statPumpWrites = 0;
     qint64 m_statDiscardedBytes = 0; // written into the socket, dropped at close
+    qint64 m_statRedirects = 0;      // client connections handed back to upstream
 };
 
 #endif
