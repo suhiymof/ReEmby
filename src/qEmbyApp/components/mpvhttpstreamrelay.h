@@ -165,6 +165,8 @@ private:
 
     // Diagnostics, logged in aggregate -- never per chunk.
     qint64 m_statFetches = 0;
+    qint64 m_statCacheRequests = 0;
+    qint64 m_statConnections = 0;
     qint64 m_statBytesFromCache = 0;
     qint64 m_statBytesFromUpstream = 0;
 };

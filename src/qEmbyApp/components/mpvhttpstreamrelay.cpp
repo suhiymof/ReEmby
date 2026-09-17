@@ -20,8 +20,17 @@ namespace
 {
 
 constexpr qint64 kReplyReadBufferBytes = 4 * 1024 * 1024;
+// Pass-through: the data has to reach mpv anyway, so keep its socket busy.
 constexpr qint64 kSocketQueuedBytesHighWater = 4 * 1024 * 1024;
+// Cached path: mpv seeks to an offset, reads a couple of kilobytes and closes
+// the connection, ~25-50 times per second for a non-interleaved audio track.
+// Pre-filling megabytes per request therefore only burns local copies -- it was
+// measured at 4.7 MB per request, i.e. ~200 MB/s of pointless memory traffic.
+constexpr qint64 kCacheSocketHighWaterBytes = 128 * 1024;
 constexpr qint64 kRelayPumpChunkBytes = 256 * 1024;
+// One aggregate log line per this many client connections, so a playing media
+// does not produce tens of thousands of lines.
+constexpr int kConnectionLogInterval = 200;
 constexpr qint64 kFetchChunkBytes = 1024 * 1024;
 constexpr qint64 kDefaultReadaheadBytes = 64 * 1024 * 1024;
 // Memory-only for now; the design in tools/relay-design.md replaces this with
@@ -291,8 +300,13 @@ void MpvHttpStreamRelay::processRequest(QTcpSocket *socket, const QByteArray &re
         it->needPos = begin;
         it->servedFromCache = 0;
 
-        qDebug() << "[MpvHttpStreamRelay] ranged request"
-                 << "| range:" << rangeHeader << "| begin:" << begin << "| end:" << end;
+        ++m_statCacheRequests;
+        if (m_statCacheRequests == 1 || m_statCacheRequests % 500 == 0)
+        {
+            qDebug() << "[MpvHttpStreamRelay] ranged request"
+                     << "| count:" << m_statCacheRequests
+                     << "| range:" << rangeHeader << "| begin:" << begin << "| end:" << end;
+        }
 
         pumpCacheToSocket(socket);
 
@@ -530,6 +544,8 @@ void MpvHttpStreamRelay::resetCache()
     m_redirectDepth = 0;
     m_redirectPending = false;
     m_statFetches = 0;
+    m_statCacheRequests = 0;
+    m_statConnections = 0;
     m_statBytesFromCache = 0;
     m_statBytesFromUpstream = 0;
 }
@@ -767,7 +783,7 @@ void MpvHttpStreamRelay::pumpCacheToSocket(QTcpSocket *socket)
             return;
         }
 
-        const qint64 budget = kSocketQueuedBytesHighWater - socket->bytesToWrite();
+        const qint64 budget = kCacheSocketHighWaterBytes - socket->bytesToWrite();
         if (budget <= 0)
         {
             return;
@@ -1342,11 +1358,24 @@ void MpvHttpStreamRelay::closeConnection(QTcpSocket *socket)
 
         if (wasCacheMode)
         {
-            qDebug() << "[MpvHttpStreamRelay] client closed"
-                     << "| cachedBytes:" << m_cachedBytes
-                     << "| statFetches:" << m_statFetches
-                     << "| bytesFromCache:" << m_statBytesFromCache
-                     << "| bytesFromUpstream:" << m_statBytesFromUpstream;
+            // One aggregate line every kConnectionLogInterval connections: a
+            // non-interleaved audio track opens tens of connections per second,
+            // so a line per connection buries the rest of the log.
+            // avgBytesPerConnection is the number to watch -- it should stay
+            // close to kCacheSocketHighWaterBytes, not in the megabytes.
+            ++m_statConnections;
+            if (m_statConnections % kConnectionLogInterval == 0)
+            {
+                const qint64 perConnection =
+                    m_statBytesFromCache / qMax<qint64>(1, m_statConnections);
+                qDebug() << "[MpvHttpStreamRelay] cache activity"
+                         << "| connections:" << m_statConnections
+                         << "| avgBytesPerConnection:" << perConnection
+                         << "| cachedBytes:" << m_cachedBytes
+                         << "| fetches:" << m_statFetches
+                         << "| bytesFromCache:" << m_statBytesFromCache
+                         << "| bytesFromUpstream:" << m_statBytesFromUpstream;
+            }
         }
     }
 
