@@ -23,11 +23,14 @@ namespace
 constexpr qint64 kReplyReadBufferBytes = 4 * 1024 * 1024;
 // Pass-through: the data has to reach mpv anyway, so keep its socket busy.
 constexpr qint64 kSocketQueuedBytesHighWater = 4 * 1024 * 1024;
-// Cached path: mpv seeks to an offset, reads a couple of kilobytes and closes
-// the connection, ~25-50 times per second for a non-interleaved audio track.
-// Pre-filling megabytes per request therefore only burns local copies -- it was
-// measured at 4.7 MB per request, i.e. ~200 MB/s of pointless memory traffic.
-constexpr qint64 kCacheSocketHighWaterBytes = 128 * 1024;
+// Cached path: mpv seeks to an offset, reads a few hundred kilobytes and closes
+// the connection, tens of times per second for a non-interleaved audio track.
+// The high-water mark must be at least that large: otherwise one response needs
+// several event-loop round trips (measured: 5), and each round trip costs about
+// 1.8 ms because the relay shares ReEmby's main thread with rendering, danmaku
+// and UI work. One round trip per connection is the goal, so this is sized to
+// swallow a typical request whole.
+constexpr qint64 kCacheSocketHighWaterBytes = 512 * 1024;
 constexpr qint64 kRelayPumpChunkBytes = 256 * 1024;
 // One aggregate log line per this many client connections, so a playing media
 // does not produce tens of thousands of lines.
@@ -121,6 +124,8 @@ QUrl MpvHttpStreamRelay::prepare(const QUrl &targetUrl, const QString &serverId,
             << "| proxyType:" << proxy.type()
             << "| readaheadMiB:" << (m_readaheadBytes / (1024 * 1024));
 
+    warmUpstreamRedirects();
+
     return localUrl;
 }
 
@@ -150,6 +155,14 @@ void MpvHttpStreamRelay::stop()
     m_serverId.clear();
     m_streamToken.clear();
     releaseFetch();
+    if (m_redirectProbe)
+    {
+        QNetworkReply *probe = m_redirectProbe;
+        m_redirectProbe = nullptr;
+        disconnect(probe, nullptr, this, nullptr);
+        probe->abort();
+        probe->deleteLater();
+    }
     m_scheduledFetchPos = -1;
     resetCache();
 }
@@ -1017,6 +1030,77 @@ void MpvHttpStreamRelay::resumeStalledConnections()
             return;
         }
     }
+}
+
+// Resolving this server's redirect chain costs two extra round trips, measured
+// at ~8 seconds together, and mpv cannot start until the first byte arrives.
+// Kick the resolution off in the background as soon as the relay is prepared, so
+// mpv's first request can go straight to the final URL. Failing here is
+// harmless: the normal read path resolves the chain itself.
+void MpvHttpStreamRelay::warmUpstreamRedirects()
+{
+    if (m_targetUrl.isEmpty() || !m_redirectTarget.isEmpty())
+    {
+        return;
+    }
+    resolveRedirectStep(m_targetUrl, 0);
+}
+
+void MpvHttpStreamRelay::resolveRedirectStep(const QUrl &url, int depth)
+{
+    if (m_targetUrl.isEmpty() || !m_redirectTarget.isEmpty() || depth > kMaxRedirects)
+    {
+        return;
+    }
+    if (m_redirectProbe)
+    {
+        return; // one probe at a time
+    }
+
+    QNetworkRequest request(url);
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
+    request.setRawHeader("Range", "bytes=0-0"); // one byte is enough to walk the chain
+    if (!m_upstreamUserAgent.isEmpty())
+    {
+        request.setHeader(QNetworkRequest::UserAgentHeader, m_upstreamUserAgent);
+    }
+
+    QNetworkReply *probe = m_network->get(request);
+    probe->setReadBufferSize(64 * 1024);
+    m_redirectProbe = probe;
+
+    connect(probe, &QNetworkReply::finished, this,
+            [this, probe, depth]()
+            {
+                if (probe != m_redirectProbe)
+                {
+                    return; // stop() or a newer probe took over
+                }
+                const int statusCode = probe->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+                const QByteArray location = probe->rawHeader("Location");
+                const QUrl probeUrl = probe->request().url();
+                m_redirectProbe = nullptr;
+                probe->deleteLater();
+
+                if (statusCode >= 300 && statusCode < 400 && !location.isEmpty())
+                {
+                    const QUrl next = probeUrl.resolved(QUrl::fromEncoded(location));
+                    if (next.isValid() && !next.scheme().isEmpty())
+                    {
+                        resolveRedirectStep(next, depth + 1);
+                        return;
+                    }
+                }
+
+                if (statusCode == 206 || statusCode == 200)
+                {
+                    m_redirectTarget = probeUrl;
+                    m_redirectDepth = depth;
+                    qInfo() << "[MpvHttpStreamRelay] redirect chain pre-resolved"
+                            << "| hops:" << depth
+                            << "| to:" << LogRedactionUtils::url(m_redirectTarget);
+                }
+            });
 }
 
 QUrl MpvHttpStreamRelay::effectiveUpstreamUrl() const

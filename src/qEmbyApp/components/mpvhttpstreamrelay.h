@@ -114,6 +114,8 @@ private:
     void runScheduledFetch();
     void resumeStalledConnections();
     bool followRedirect(QNetworkReply *reply);
+    void warmUpstreamRedirects();
+    void resolveRedirectStep(const QUrl &url, int depth);
     QUrl effectiveUpstreamUrl() const;
     void parseFetchHeaders();
     void onFetchReadyRead();
@@ -148,6 +150,9 @@ private:
     // pre-signed URL expires).
     QUrl m_redirectTarget;
     int m_redirectDepth = 0;
+    // Background probe that resolves the redirect chain before mpv asks for
+    // anything, so the first request can go straight to the final URL.
+    QNetworkReply *m_redirectProbe = nullptr;
     // Set when a redirect has been detected but its retry has not started yet:
     // the redirect's own body must never be read into the cache (that would
     // advance m_fetchPos past the offset mpv actually asked for), and the same

@@ -3,6 +3,7 @@
 #include "config/config_keys.h"
 #include "config/configstore.h"
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDesktopServices>
 #include <QDebug>
 #include <QJsonArray>
@@ -142,6 +143,24 @@ void UpdateManager::handleReply(QNetworkReply *reply, CheckMode mode)
     if (status == 404) {
         qInfo() << "UpdateManager: repository has no published release";
         Q_EMIT noUpdateAvailable(mode);
+        return;
+    }
+    if (status == 403
+        && reply->rawHeader("x-ratelimit-remaining") == QByteArrayLiteral("0")) {
+        // Unauthenticated GitHub API access allows 60 requests per hour per
+        // address, and the answer once that is used up is a bare 403. Report it
+        // as a quota problem rather than as a connection failure.
+        const qint64 resetEpoch = reply->rawHeader("x-ratelimit-reset").toLongLong();
+        const QString resetText =
+            resetEpoch > 0
+                ? QDateTime::fromSecsSinceEpoch(resetEpoch).toString(QStringLiteral("HH:mm"))
+                : QString();
+        qWarning() << "UpdateManager: GitHub API rate limit reached"
+                   << "| remaining=0 | resets at=" << resetText;
+        Q_EMIT checkFailed(
+            tr("GitHub rate limit reached (60 checks per hour without a token). Try again after %1.")
+                .arg(resetText),
+            mode);
         return;
     }
     if (networkError != QNetworkReply::NoError) {

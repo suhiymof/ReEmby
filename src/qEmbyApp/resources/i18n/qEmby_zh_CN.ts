@@ -2923,6 +2923,10 @@ Special thanks to the Emby and Jellyfin communities for their fantastic APIs.</s
         <translation>无法连接 GitHub：%1</translation>
     </message>
     <message>
+        <source>GitHub rate limit reached (60 checks per hour without a token). Try again after %1.</source>
+        <translation>已达到 GitHub 访问频率上限（无令牌时每小时 60 次）。请在 %1 之后重试。</translation>
+    </message>
+    <message>
         <source>GitHub returned invalid update information.</source>
         <translation>GitHub 返回了无效的更新信息。</translation>
     </message>
