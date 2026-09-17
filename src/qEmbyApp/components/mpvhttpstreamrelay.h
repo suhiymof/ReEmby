@@ -153,9 +153,15 @@ private:
     // Background probe that resolves the redirect chain before mpv asks for
     // anything, so the first request can go straight to the final URL.
     QNetworkReply *m_redirectProbe = nullptr;
+    // Set only when the probe itself reached the final URL. The read path also
+    // fills m_redirectTarget, one hop at a time, so that member cannot be used
+    // to tell whether the chain has been walked to the end -- using it as the
+    // guard silently cancelled the warm-up on every single playback.
+    bool m_redirectResolved = false;
     // Time origin for the start-up diagnostics: how long the relay took to put
-    // the first upstream byte in front of mpv.
-    qint64 m_preparedNs = 0;
+    // the first upstream byte in front of mpv. -1 means "not armed"; 0 is a
+    // legitimate value, because QElapsedTimer returns 0 on its first call.
+    qint64 m_preparedNs = -1;
     bool m_firstByteLogged = false;
     // Set when a redirect has been detected but its retry has not started yet:
     // the redirect's own body must never be read into the cache (that would

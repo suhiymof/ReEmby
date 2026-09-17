@@ -31,7 +31,7 @@ constexpr qint64 kSocketQueuedBytesHighWater = 4 * 1024 * 1024;
 // and UI work. One round trip per connection is the goal, so this is sized to
 // swallow a typical request whole.
 constexpr qint64 kCacheSocketHighWaterBytes = 2 * 1024 * 1024;
-constexpr qint64 kRelayPumpChunkBytes = 256 * 1024;
+constexpr qint64 kRelayPumpChunkBytes = 1024 * 1024;
 // One aggregate log line per this many client connections, so a playing media
 // does not produce tens of thousands of lines.
 constexpr int kConnectionLogInterval = 200;
@@ -114,6 +114,7 @@ QUrl MpvHttpStreamRelay::prepare(const QUrl &targetUrl, const QString &serverId,
     m_readaheadBytes = readaheadBytes > 0 ? readaheadBytes : kDefaultReadaheadBytes;
     m_preparedNs = monotonicNs();
     m_firstByteLogged = false;
+    m_redirectResolved = false;
     resetCache();
     m_speedTimer->start();
 
@@ -1044,7 +1045,7 @@ void MpvHttpStreamRelay::resumeStalledConnections()
 // harmless: the normal read path resolves the chain itself.
 void MpvHttpStreamRelay::warmUpstreamRedirects()
 {
-    if (m_targetUrl.isEmpty() || !m_redirectTarget.isEmpty())
+    if (m_targetUrl.isEmpty() || m_redirectResolved)
     {
         return;
     }
@@ -1053,7 +1054,7 @@ void MpvHttpStreamRelay::warmUpstreamRedirects()
 
 void MpvHttpStreamRelay::resolveRedirectStep(const QUrl &url, int depth)
 {
-    if (m_targetUrl.isEmpty() || !m_redirectTarget.isEmpty() || depth > kMaxRedirects)
+    if (m_targetUrl.isEmpty() || m_redirectResolved || depth > kMaxRedirects)
     {
         return;
     }
@@ -1065,6 +1066,9 @@ void MpvHttpStreamRelay::resolveRedirectStep(const QUrl &url, int depth)
     QNetworkRequest request(url);
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
     request.setRawHeader("Range", "bytes=0-0"); // one byte is enough to walk the chain
+    // A stalled hop would otherwise keep the probe pending until the media is
+    // closed, leaving the whole warm-up silent for the session.
+    request.setTransferTimeout(kRedirectProbeTimeoutMs);
     if (!m_upstreamUserAgent.isEmpty())
     {
         request.setHeader(QNetworkRequest::UserAgentHeader, m_upstreamUserAgent);
@@ -1073,6 +1077,10 @@ void MpvHttpStreamRelay::resolveRedirectStep(const QUrl &url, int depth)
     QNetworkReply *probe = m_network->get(request);
     probe->setReadBufferSize(64 * 1024);
     m_redirectProbe = probe;
+
+    qInfo() << "[MpvHttpStreamRelay] pre-resolve probing"
+            << "| depth:" << depth
+            << "| url:" << LogRedactionUtils::url(url);
 
     connect(probe, &QNetworkReply::finished, this,
             [this, probe, depth]()
@@ -1111,6 +1119,7 @@ void MpvHttpStreamRelay::resolveRedirectStep(const QUrl &url, int depth)
                 {
                     m_redirectTarget = probeUrl;
                     m_redirectDepth = depth;
+                    m_redirectResolved = true;
                     qInfo() << "[MpvHttpStreamRelay] redirect chain pre-resolved"
                             << "| hops:" << depth
                             << "| to:" << LogRedactionUtils::url(m_redirectTarget);
@@ -1262,7 +1271,7 @@ void MpvHttpStreamRelay::parseFetchHeaders()
         }
     }
 
-    if (!m_firstByteLogged && m_preparedNs > 0)
+    if (!m_firstByteLogged && m_preparedNs >= 0)
     {
         // Everything before this point is time mpv spends waiting with nothing
         // to decode, so it is the number that explains a slow start-up.
@@ -1386,6 +1395,7 @@ void MpvHttpStreamRelay::onFetchFinished()
                     << "| status:" << finishedStatus << "| fetchPos:" << m_fetchPos;
             m_redirectTarget.clear();
             m_redirectDepth = 0;
+            m_redirectResolved = false; // let the warm-up probe in again
             releaseFetch();
             scheduleFetch(m_fetchPos);
             return;
