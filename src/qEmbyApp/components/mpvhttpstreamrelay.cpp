@@ -66,6 +66,26 @@ qint64 monotonicNs()
     return clock.nsecsElapsed();
 }
 
+// Adds the wall time spent inside a scope to a counter. Used to attribute the
+// per-connection cost to the calls that actually consume it, without having to
+// instrument every return path by hand. Declared after monotonicNs() on
+// purpose -- it calls into it.
+class ScopeTimer
+{
+public:
+    explicit ScopeTimer(qint64 *accumulator)
+        : m_accumulator(accumulator), m_startNs(monotonicNs())
+    {
+    }
+    ~ScopeTimer() { *m_accumulator += monotonicNs() - m_startNs; }
+    ScopeTimer(const ScopeTimer &) = delete;
+    ScopeTimer &operator=(const ScopeTimer &) = delete;
+
+private:
+    qint64 *m_accumulator = nullptr;
+    qint64 m_startNs = 0;
+};
+
 } // namespace
 
 MpvHttpStreamRelay::MpvHttpStreamRelay(QObject *parent)
@@ -90,7 +110,7 @@ MpvHttpStreamRelay::~MpvHttpStreamRelay()
 
 QUrl MpvHttpStreamRelay::prepare(const QUrl &targetUrl, const QString &serverId,
                                  const QNetworkProxy &proxy, const QString &userAgent,
-                                 qint64 readaheadBytes)
+                                 const Tuning &tuning)
 {
     if (!targetUrl.isValid() || targetUrl.scheme().isEmpty())
     {
@@ -111,7 +131,10 @@ QUrl MpvHttpStreamRelay::prepare(const QUrl &targetUrl, const QString &serverId,
     m_upstreamUserAgent = userAgent.trimmed();
     m_network->setProxy(proxy);
     m_bytesRelayedSinceLastTick = 0;
-    m_readaheadBytes = readaheadBytes > 0 ? readaheadBytes : kDefaultReadaheadBytes;
+    m_readaheadBytes = tuning.readaheadBytes > 0 ? tuning.readaheadBytes : kDefaultReadaheadBytes;
+    m_socketHighWaterBytes = tuning.socketHighWaterBytes > 0 ? tuning.socketHighWaterBytes
+                                                            : kCacheSocketHighWaterBytes;
+    m_pumpChunkBytes = tuning.pumpChunkBytes > 0 ? tuning.pumpChunkBytes : kRelayPumpChunkBytes;
     m_preparedNs = monotonicNs();
     m_firstByteLogged = false;
     m_redirectResolved = false;
@@ -128,7 +151,9 @@ QUrl MpvHttpStreamRelay::prepare(const QUrl &targetUrl, const QString &serverId,
             << "| target:" << LogRedactionUtils::url(m_targetUrl) << "| local:" << localUrl.toString(QUrl::FullyEncoded)
             << "| serverId:" << (m_serverId.isEmpty() ? QStringLiteral("<none>") : m_serverId)
             << "| proxyType:" << proxy.type()
-            << "| readaheadMiB:" << (m_readaheadBytes / (1024 * 1024));
+            << "| readaheadMiB:" << (m_readaheadBytes / (1024 * 1024))
+            << "| highWaterKiB:" << (m_socketHighWaterBytes / 1024)
+            << "| pumpChunkKiB:" << (m_pumpChunkBytes / 1024);
 
     warmUpstreamRedirects();
 
@@ -606,6 +631,8 @@ void MpvHttpStreamRelay::resetCache()
     m_statHeadersToDoneNs = 0;
     m_statPumpWrites = 0;
     m_statDiscardedBytes = 0;
+    m_statPumpNs = 0;
+    m_statWriteNs = 0;
     m_statRedirects = 0;
 }
 
@@ -794,6 +821,7 @@ void MpvHttpStreamRelay::pumpCacheToSocket(QTcpSocket *socket)
     {
         return;
     }
+    ScopeTimer pumpTimer(&m_statPumpNs);
 
     for (;;)
     {
@@ -843,13 +871,19 @@ void MpvHttpStreamRelay::pumpCacheToSocket(QTcpSocket *socket)
             return;
         }
 
-        const qint64 budget = kCacheSocketHighWaterBytes - socket->bytesToWrite();
+        const qint64 budget = m_socketHighWaterBytes - socket->bytesToWrite();
         if (budget <= 0)
         {
             return;
         }
-        const qint64 chunkSize = qMin(available, qMin(kRelayPumpChunkBytes, budget));
-        const qint64 written = socket->write(block.data.constData() + offset, chunkSize);
+        const qint64 chunkSize = qMin(available, qMin(m_pumpChunkBytes, budget));
+        qint64 written = 0;
+        {
+            // Timed separately: write() also runs the socket flush, and on a
+            // full loopback buffer that means shifting Qt's whole write queue.
+            ScopeTimer writeTimer(&m_statWriteNs);
+            written = socket->write(block.data.constData() + offset, chunkSize);
+        }
         if (written <= 0)
         {
             return;
@@ -1624,6 +1658,8 @@ void MpvHttpStreamRelay::logActivitySummary()
              << "| acceptToRequestUs:" << (m_statAcceptToRequestNs / timed / 1000)
              << "| requestToHeadersUs:" << (m_statRequestToHeadersNs / timed / 1000)
              << "| headersToDoneUs:" << (m_statHeadersToDoneNs / timed / 1000)
+             << "| pumpCpuUs:" << (m_statPumpNs / connections / 1000)
+             << "| writeCpuUs:" << (m_statWriteNs / connections / 1000)
              << "| cachedBytes:" << m_cachedBytes
              << "| redirects:" << m_statRedirects
              << "| fetches:" << m_statFetches

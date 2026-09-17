@@ -360,10 +360,19 @@ void MpvWidget::loadMediaNow(const QString &url, const QString &serverId, bool w
     if (shouldRelay && m_streamRelay) {
         const int readaheadMbCfg =
             relayCfg->get<int>(ConfigKeys::PlayerRelayReadaheadMb, 64);
-        const qint64 readaheadBytes =
+        const int highWaterKbCfg =
+            relayCfg->get<int>(ConfigKeys::PlayerRelayHighWaterKb, 2048);
+        const int pumpChunkKbCfg =
+            relayCfg->get<int>(ConfigKeys::PlayerRelayPumpChunkKb, 1024);
+        MpvHttpStreamRelay::Tuning relayTuning;
+        relayTuning.readaheadBytes =
             static_cast<qint64>(readaheadMbCfg > 0 ? readaheadMbCfg : 64) * 1024 * 1024;
+        relayTuning.socketHighWaterBytes =
+            static_cast<qint64>(highWaterKbCfg > 0 ? highWaterKbCfg : 2048) * 1024;
+        relayTuning.pumpChunkBytes =
+            static_cast<qint64>(pumpChunkKbCfg > 0 ? pumpChunkKbCfg : 1024) * 1024;
         const QUrl localUrl = m_streamRelay->prepare(loadQUrl, serverId, proxy,
-                                                     m_customUserAgent, readaheadBytes);
+                                                     m_customUserAgent, relayTuning);
         if (localUrl.isValid()) {
             playbackUrl = localUrl.toString(QUrl::FullyEncoded);
             usingRelay = true;

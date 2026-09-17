@@ -38,13 +38,29 @@ class QTcpSocket;
 class MpvHttpStreamRelay : public QObject {
     Q_OBJECT
 public:
+    // Operating parameters, all overridable from the config file so a slow
+    // machine can trade throughput for CPU without a rebuild. Defaults match
+    // the values that were tuned on the reference machine.
+    struct Tuning {
+        // How far past its start offset one upstream read may go (MiB-sized).
+        qint64 readaheadBytes = 64 * 1024 * 1024;
+        // How many bytes may sit in the socket's write queue before the relay
+        // stops feeding that connection. Larger = mpv consumes more per
+        // connection (fewer connections), but more data to drop on close.
+        qint64 socketHighWaterBytes = 2 * 1024 * 1024;
+        // Largest single write per event-loop turn. Keeping this close to what
+        // the kernel socket buffer accepts avoids piling megabytes into Qt's
+        // write buffer, where every drain shifts the remainder.
+        qint64 pumpChunkBytes = 1024 * 1024;
+    };
+
     explicit MpvHttpStreamRelay(QObject *parent = nullptr);
     ~MpvHttpStreamRelay() override;
 
     QUrl prepare(const QUrl &targetUrl, const QString &serverId,
                  const QNetworkProxy &proxy,
                  const QString &userAgent = QString(),
-                 qint64 readaheadBytes = 0);
+                 const Tuning &tuning = Tuning());
     void stop();
 
 Q_SIGNALS:
@@ -183,6 +199,9 @@ private:
     qint64 m_fetchRequestPos = 0;     // offset the in-flight read was issued for
     qint64 m_fetchLimit = 0;          // read no further than this
     qint64 m_readaheadBytes = 0;
+    // Effective write tuning for the current media, taken from Tuning.
+    qint64 m_socketHighWaterBytes = 2 * 1024 * 1024;
+    qint64 m_pumpChunkBytes = 1024 * 1024;
     qint64 m_scheduledFetchPos = -1;
     bool m_schedulePending = false;
 
@@ -199,6 +218,10 @@ private:
     qint64 m_statHeadersToDoneNs = 0;
     qint64 m_statPumpWrites = 0;
     qint64 m_statDiscardedBytes = 0; // written into the socket, dropped at close
+    // CPU attribution: time inside the two calls that dominate the
+    // per-connection cost, summed over every invocation (nanoseconds).
+    qint64 m_statPumpNs = 0;  // pumpCacheToSocket, including its turnarounds
+    qint64 m_statWriteNs = 0; // QAbstractSocket::write() only
     qint64 m_statRedirects = 0;      // client connections handed back to upstream
 };
 

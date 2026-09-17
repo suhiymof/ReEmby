@@ -159,6 +159,13 @@ constexpr const char* PlayerRelayEnabled = "player/relay_enabled"; // bool, defa
 // example an audio track stored at the end of the file) fill the cache for
 // every follow-up request on that region.
 constexpr const char* PlayerRelayReadaheadMb = "player/relay_readahead_mb"; // int MiB, default 64
+// Relay socket write tuning, in KiB. Raising the high-water mark lets mpv take
+// more per connection (fewer connections, better throughput) but makes each
+// connection more expensive to feed; lowering it cuts that cost at the price of
+// more connections. pump_chunk_kb caps a single write per event-loop turn and
+// should stay close to what the kernel socket buffer accepts.
+constexpr const char* PlayerRelayHighWaterKb = "player/relay_high_water_kb";  // int KiB, default 2048
+constexpr const char* PlayerRelayPumpChunkKb = "player/relay_pump_chunk_kb";  // int KiB, default 1024
 // Advanced mpv tuning (Settings -> Player). All values are read per file by
 // MpvWidget; empty values fall back to mpv defaults.
 constexpr const char* PlayerAudioChannels = "player/audio_channels";              // QString: auto|stereo|mono
