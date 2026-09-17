@@ -528,6 +528,7 @@ void MpvHttpStreamRelay::resetCache()
     m_fetchLimit = 0;
     m_redirectTarget.clear();
     m_redirectDepth = 0;
+    m_redirectPending = false;
     m_statFetches = 0;
     m_statBytesFromCache = 0;
     m_statBytesFromUpstream = 0;
@@ -848,6 +849,7 @@ void MpvHttpStreamRelay::broadcastCachedData()
 bool MpvHttpStreamRelay::startFetch(qint64 pos)
 {
     releaseFetch();
+    m_redirectPending = false;
     if (m_targetUrl.isEmpty() || m_rangeUnsupported)
     {
         return false;
@@ -871,6 +873,7 @@ bool MpvHttpStreamRelay::startFetch(qint64 pos)
     m_fetch = m_network->get(request);
     m_fetch->setReadBufferSize(kReplyReadBufferBytes);
     m_fetchPos = pos;
+    m_fetchRequestPos = pos;
     m_fetchLimit = pos + m_readaheadBytes;
     ++m_statFetches;
 
@@ -885,11 +888,18 @@ bool MpvHttpStreamRelay::startFetch(qint64 pos)
 
 void MpvHttpStreamRelay::scheduleFetch(qint64 pos)
 {
-    m_scheduledFetchPos = pos;
     if (m_schedulePending)
     {
+        // A queued redirect retry must keep its own offset: a later caller
+        // asking for a different position must not overwrite it.
+        if (m_redirectPending)
+        {
+            return;
+        }
+        m_scheduledFetchPos = pos;
         return;
     }
+    m_scheduledFetchPos = pos;
     m_schedulePending = true;
     // Never abort or restart a reply from inside its own readyRead handler:
     // defer the (re)start to the next event loop turn.
@@ -905,7 +915,10 @@ void MpvHttpStreamRelay::runScheduledFetch()
     {
         return;
     }
-    if (m_fetch && !m_fetch->isFinished() && pos >= m_fetchPos && pos < m_fetchLimit)
+    // A pending redirect retry always wins: the in-flight reply holds no payload
+    // even though its offset still looks "covered".
+    if (!m_redirectPending && m_fetch && !m_fetch->isFinished() &&
+        pos >= m_fetchPos && pos < m_fetchLimit)
     {
         return; // the in-flight read already covers this offset
     }
@@ -917,6 +930,10 @@ void MpvHttpStreamRelay::ensureFetchFrom(qint64 pos)
     if (m_rangeUnsupported)
     {
         return;
+    }
+    if (m_redirectPending)
+    {
+        return; // a retry against the resolved target is already queued
     }
     if (m_fetch && !m_fetch->isFinished() && pos >= m_fetchPos && pos < m_fetchLimit)
     {
@@ -1004,7 +1021,7 @@ bool MpvHttpStreamRelay::followRedirect(QNetworkReply *reply)
 
 void MpvHttpStreamRelay::parseFetchHeaders()
 {
-    if (!m_fetch || m_rangeUnsupported || m_totalSize > 0)
+    if (!m_fetch || m_rangeUnsupported || m_redirectPending || m_totalSize > 0)
     {
         return;
     }
@@ -1019,13 +1036,16 @@ void MpvHttpStreamRelay::parseFetchHeaders()
 
     if (followRedirect(m_fetch))
     {
-        // Re-issue from the same offset against the resolved target. Deferred,
-        // because aborting a reply from inside its own readyRead handler is not
-        // safe; no payload arrived yet, so m_fetchPos is still the request start.
-        const qint64 resumePos = m_fetchPos;
+        // A redirect carries no payload: flag it so readyRead stops reading this
+        // reply (its body would otherwise be appended to the cache and drag
+        // m_fetchPos past the offset mpv actually asked for), and re-issue from
+        // the offset this read was issued for. The restart is deferred, because
+        // aborting a reply from inside its own readyRead handler is not safe.
+        m_redirectPending = true;
+        const qint64 resumePos = m_fetchRequestPos;
         qInfo() << "[MpvHttpStreamRelay] retrying read after redirect"
                 << "| begin:" << resumePos;
-        QTimer::singleShot(0, this, [this, resumePos]() { startFetch(resumePos); });
+        scheduleFetch(resumePos);
         return;
     }
 
@@ -1092,7 +1112,7 @@ void MpvHttpStreamRelay::onFetchReadyRead()
     {
         parseFetchHeaders();
     }
-    if (!m_fetch || m_rangeUnsupported)
+    if (!m_fetch || m_rangeUnsupported || m_redirectPending)
     {
         return;
     }

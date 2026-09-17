@@ -140,6 +140,11 @@ private:
     // pre-signed URL expires).
     QUrl m_redirectTarget;
     int m_redirectDepth = 0;
+    // Set when a redirect has been detected but its retry has not started yet:
+    // the redirect's own body must never be read into the cache (that would
+    // advance m_fetchPos past the offset mpv actually asked for), and the same
+    // reply must not be parsed twice.
+    bool m_redirectPending = false;
     qint64 m_bytesRelayedSinceLastTick = 0;
 
     // Byte-range cache (memory only for now; see tools/relay-design.md).
@@ -152,6 +157,7 @@ private:
     // Shared upstream read: one at a time for the whole media.
     QNetworkReply *m_fetch = nullptr;
     qint64 m_fetchPos = 0;            // next absolute offset to be appended
+    qint64 m_fetchRequestPos = 0;     // offset the in-flight read was issued for
     qint64 m_fetchLimit = 0;          // read no further than this
     qint64 m_readaheadBytes = 0;
     qint64 m_scheduledFetchPos = -1;
