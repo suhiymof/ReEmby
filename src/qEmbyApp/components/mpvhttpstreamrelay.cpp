@@ -88,9 +88,12 @@ private:
 
 } // namespace
 
+// The relay is moved onto its own thread right after construction, so whatever
+// is created here ends up owned by that thread. QTcpServer and QTimer are fine
+// with that; QNetworkAccessManager is the one object Qt insists on creating in
+// the thread that will use it, so it is created lazily from prepare() instead.
 MpvHttpStreamRelay::MpvHttpStreamRelay(QObject *parent)
-    : QObject(parent), m_server(new QTcpServer(this)), m_network(new QNetworkAccessManager(this)),
-      m_speedTimer(new QTimer(this))
+    : QObject(parent), m_server(new QTcpServer(this)), m_speedTimer(new QTimer(this))
 {
     connect(m_server, &QTcpServer::newConnection, this, [this]() { onNewConnection(); });
     m_speedTimer->setInterval(1000);
@@ -129,6 +132,13 @@ QUrl MpvHttpStreamRelay::prepare(const QUrl &targetUrl, const QString &serverId,
     m_serverId = serverId;
     m_streamToken = QUuid::createUuid().toString(QUuid::WithoutBraces);
     m_upstreamUserAgent = userAgent.trimmed();
+    // Created here rather than in the constructor: QNetworkAccessManager has to
+    // live in the thread that uses it, and prepare() now always runs on the
+    // relay's own thread.
+    if (!m_network)
+    {
+        m_network = new QNetworkAccessManager(this);
+    }
     m_network->setProxy(proxy);
     m_bytesRelayedSinceLastTick = 0;
     m_readaheadBytes = tuning.readaheadBytes > 0 ? tuning.readaheadBytes : kDefaultReadaheadBytes;

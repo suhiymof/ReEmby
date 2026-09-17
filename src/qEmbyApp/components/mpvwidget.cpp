@@ -10,6 +10,7 @@
 #include <QPaintEvent>
 #include <QResizeEvent>
 #include <QShowEvent>
+#include <QThread>
 #include <QTimer>
 #include <QUrl>
 #include <QVariantMap>
@@ -48,7 +49,16 @@ MpvWidget::MpvWidget(QWidget *parent, bool standalone)
     this->setFormat(format);
 
     m_controller = new MpvController(this);
-    m_streamRelay = new MpvHttpStreamRelay(this);
+
+    // relay 跑在独立线程（原因见 mpvwidget.h 里该成员的注释）。relay 自身不带
+    // parent —— moveToThread 要求如此；它的子对象（QTcpServer / QNAM / QTimer）
+    // 会一起搬过去，因此 listen 与全部连接处理都发生在那个线程。
+    m_relayThread = new QThread(this);
+    m_relayThread->setObjectName(QStringLiteral("MpvStreamRelay"));
+    m_streamRelay = new MpvHttpStreamRelay();
+    m_streamRelay->moveToThread(m_relayThread);
+    m_relayThread->start();
+
     connect(m_streamRelay, &MpvHttpStreamRelay::upstreamSpeedChanged, this,
             &MpvWidget::networkSpeedChanged);
 
@@ -88,6 +98,17 @@ MpvWidget::~MpvWidget() {
     
     
     shutdown();
+
+    // shutdown() 已在线程还活着时让它停下；这里收尾线程本身。顺序重要：先
+    // quit/wait 再 delete —— 在所属线程之外销毁一个仍绑定该线程的对象是未定义
+    // 行为，反过来线程已退出后直接 delete 则是安全的。
+    if (m_relayThread) {
+        m_relayThread->quit();
+        m_relayThread->wait();
+    }
+    delete m_streamRelay;
+    m_streamRelay = nullptr;
+
     if (m_controller) {
         m_controller->deleteLater();
         m_controller = nullptr;
@@ -105,9 +126,7 @@ void MpvWidget::shutdown() {
     
     
     m_controller->command(QVariantList{"stop"});
-    if (m_streamRelay) {
-        m_streamRelay->stop();
-    }
+    stopRelay();
     if (m_usingStreamRelay) {
         m_usingStreamRelay = false;
         Q_EMIT relayActiveChanged(false);
@@ -116,6 +135,21 @@ void MpvWidget::shutdown() {
     cleanupGL();
 
     m_controller->forceCleanup();
+}
+
+void MpvWidget::stopRelay() {
+    if (!m_streamRelay) {
+        return;
+    }
+    // Blocking dispatch, so callers keep the old synchronous behaviour. Once the
+    // thread is gone (destructor order) calling it directly is safe -- and a
+    // blocking call into a thread without an event loop would deadlock.
+    if (m_relayThread && m_relayThread->isRunning()) {
+        QMetaObject::invokeMethod(m_streamRelay, [this]() { m_streamRelay->stop(); },
+                                  Qt::BlockingQueuedConnection);
+    } else {
+        m_streamRelay->stop();
+    }
 }
 
 void MpvWidget::cleanupGL() {
@@ -371,14 +405,23 @@ void MpvWidget::loadMediaNow(const QString &url, const QString &serverId, bool w
             static_cast<qint64>(highWaterKbCfg > 0 ? highWaterKbCfg : 2048) * 1024;
         relayTuning.pumpChunkBytes =
             static_cast<qint64>(pumpChunkKbCfg > 0 ? pumpChunkKbCfg : 1024) * 1024;
-        const QUrl localUrl = m_streamRelay->prepare(loadQUrl, serverId, proxy,
-                                                     m_customUserAgent, relayTuning);
+        // prepare() 必须同步返回本地 URL，所以用阻塞式队列调用把它交给 relay
+        // 线程执行；主线程只等 listen() + 生成 URL（毫秒级）。参数按值捕获，
+        // 避免工作线程去读主线程的成员。
+        const QString relayUa = m_customUserAgent;
+        QUrl localUrl;
+        QMetaObject::invokeMethod(
+            m_streamRelay,
+            [this, &localUrl, loadQUrl, serverId, proxy, relayTuning, relayUa]() {
+                localUrl = m_streamRelay->prepare(loadQUrl, serverId, proxy, relayUa, relayTuning);
+            },
+            Qt::BlockingQueuedConnection);
         if (localUrl.isValid()) {
             playbackUrl = localUrl.toString(QUrl::FullyEncoded);
             usingRelay = true;
         }
     } else if (m_streamRelay) {
-        m_streamRelay->stop();
+        stopRelay();
     }
     if (m_usingStreamRelay != usingRelay) {
         m_usingStreamRelay = usingRelay;

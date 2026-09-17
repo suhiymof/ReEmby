@@ -8,6 +8,7 @@
 #include "mpvcontroller.h"
 
 class MpvHttpStreamRelay;
+class QThread;
 class QPaintEvent;
 class QResizeEvent;
 class QShowEvent;
@@ -71,11 +72,21 @@ private:
     static void onMpvRenderUpdate(void *ctx);
     static void *getProcAddress(void *ctx, const char *name);
     void loadMediaNow(const QString &url, const QString &serverId, bool wasPending);
+    // relay lives on m_relayThread, so stop() has to be dispatched to it (and
+    // skipped once that thread is gone -- see the destructor).
+    void stopRelay();
     // standalone：把 mpv 自建的渲染子窗口尺寸对齐到本 widget 的客户区。
     void syncStandaloneRenderArea();
 
     MpvController *m_controller;
     MpvHttpStreamRelay *m_streamRelay = nullptr;
+    // The relay runs on its own thread: with a non-interleaved audio track it
+    // serves several hundred connections per second, which measured at 83% of
+    // one core -- on the very thread that also runs the Qt UI and the danmaku
+    // overlay, so the window and the keyboard both felt sluggish. Moving it off
+    // that thread costs nothing extra and stops the contention; the total CPU
+    // stays the same but lands on another core.
+    QThread *m_relayThread = nullptr;
     bool m_usingStreamRelay = false;
     bool m_resumeWhenRenderReady = false;
     bool m_standalone = false;
