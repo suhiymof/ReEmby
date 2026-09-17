@@ -236,6 +236,14 @@ private:
     qint64 m_statTurnaroundNs = 0; // pump pass return -> next bytesWritten
     qint64 m_statTurnarounds = 0;
     qint64 m_statPumpCalls = 0;
+    // The "request -> response headers" path, split into its three nested
+    // stages. They nest: readyRead contains processRequest, which contains
+    // sendCacheHeaders, so the log prints all three and the reader subtracts.
+    qint64 m_statReadyReadNs = 0;
+    qint64 m_statReadyReadCalls = 0;
+    qint64 m_statProcessNs = 0;
+    qint64 m_statSendHeadersNs = 0;
+    qint64 m_statHeaderPathCount = 0;
     qint64 m_statRedirects = 0;      // client connections handed back to upstream
 };
 

@@ -269,6 +269,9 @@ void MpvHttpStreamRelay::onNewConnection()
 
 void MpvHttpStreamRelay::onSocketReadyRead(QTcpSocket *socket)
 {
+    ScopeTimer stageTimer(&m_statReadyReadNs);
+    ++m_statReadyReadCalls;
+
     if (!socket || !socket->isOpen())
     {
         closeConnection(socket);
@@ -293,6 +296,7 @@ void MpvHttpStreamRelay::onSocketReadyRead(QTcpSocket *socket)
     }
 
     const QByteArray requestData = it->buffer.left(headerEnd + 4);
+    ++m_statHeaderPathCount;
     processRequest(socket, requestData);
 }
 
@@ -306,6 +310,8 @@ void MpvHttpStreamRelay::onSocketDisconnected(QTcpSocket *socket)
 
 void MpvHttpStreamRelay::processRequest(QTcpSocket *socket, const QByteArray &requestData)
 {
+    ScopeTimer stageTimer(&m_statProcessNs);
+
     if (m_targetUrl.isEmpty() || m_streamToken.isEmpty())
     {
         writeError(socket, 503, "Relay target is not ready");
@@ -661,6 +667,11 @@ void MpvHttpStreamRelay::resetCache()
     m_statTurnaroundNs = 0;
     m_statTurnarounds = 0;
     m_statPumpCalls = 0;
+    m_statReadyReadNs = 0;
+    m_statReadyReadCalls = 0;
+    m_statProcessNs = 0;
+    m_statSendHeadersNs = 0;
+    m_statHeaderPathCount = 0;
     m_statRedirects = 0;
 }
 
@@ -815,6 +826,10 @@ void MpvHttpStreamRelay::sendCacheHeaders(QTcpSocket *socket)
     {
         return; // upstream headers have not arrived yet
     }
+
+    // Only the pass that actually answers is timed; the no-op calls the pump
+    // loop makes on every turn would otherwise dilute this to nothing.
+    ScopeTimer stageTimer(&m_statSendHeadersNs);
 
     const qint64 begin = it->reqBegin;
     const qint64 end = (it->reqEnd >= 0) ? qMin(it->reqEnd, m_totalSize - 1) : (m_totalSize - 1);
@@ -1730,6 +1745,14 @@ void MpvHttpStreamRelay::logActivitySummary()
              << "| closes:" << m_statCloseCount
              << "| closeUs:" << (m_statCloseNs / qMax<qint64>(1, m_statCloseCount) / 1000)
              << "| pumpCallsPerConn:" << (m_statPumpCalls / connections)
+             // Request -> response headers, split into three nested stages:
+             // readyRead (whole handler) > processUs (parse + dispatch) >
+             // sendHeadersUs (build and write the 206 head).
+             << "| readyReadUs:" << (m_statReadyReadNs / qMax<qint64>(1, m_statReadyReadCalls) / 1000)
+             << "| readyReadCalls:" << m_statReadyReadCalls
+             << "| processUs:" << (m_statProcessNs / qMax<qint64>(1, m_statHeaderPathCount) / 1000)
+             << "| sendHeadersUs:" << (m_statSendHeadersNs / qMax<qint64>(1, m_statHeaderPathCount) / 1000)
+             << "| headerPaths:" << m_statHeaderPathCount
              << "| turnarounds:" << m_statTurnarounds
              << "| turnaroundUs:" << (m_statTurnaroundNs / qMax<qint64>(1, m_statTurnarounds) / 1000)
              << "| cachedBytes:" << m_cachedBytes
