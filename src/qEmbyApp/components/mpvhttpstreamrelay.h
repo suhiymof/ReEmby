@@ -107,6 +107,8 @@ private:
     void scheduleFetch(qint64 pos);
     void runScheduledFetch();
     void resumeStalledConnections();
+    bool followRedirect(QNetworkReply *reply);
+    QUrl effectiveUpstreamUrl() const;
     void parseFetchHeaders();
     void onFetchReadyRead();
     void onFetchFinished();
@@ -129,6 +131,15 @@ private:
     QString m_serverId;
     QString m_streamToken;
     QString m_upstreamUserAgent;
+    // Resolved redirect target. QNetworkAccessManager's default redirect policy
+    // (NoLessSafeRedirectPolicy) refuses the https -> http hop this server chain
+    // needs -- Emby redirects to an OpenList direct link, which redirects again
+    // to a pre-signed object-storage URL. Redirects are therefore followed by
+    // hand, and the resolved target is reused for the later reads of the same
+    // media (it is dropped again when it starts being rejected, since the
+    // pre-signed URL expires).
+    QUrl m_redirectTarget;
+    int m_redirectDepth = 0;
     qint64 m_bytesRelayedSinceLastTick = 0;
 
     // Byte-range cache (memory only for now; see tools/relay-design.md).

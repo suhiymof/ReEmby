@@ -30,6 +30,9 @@ constexpr qint64 kCacheMemoryLimitBytes = 256 * 1024 * 1024;
 // While a client is consuming data, keep the upstream read this far ahead of
 // it instead of having to re-issue a request at every limit boundary.
 constexpr qint64 kFetchLimitLowWaterBytes = 8 * 1024 * 1024;
+// The Emby -> OpenList -> object-storage chain uses two hops; allow a few more
+// before giving up on a redirect loop.
+constexpr int kMaxRedirects = 5;
 
 bool canWriteToSocket(QTcpSocket *socket)
 {
@@ -314,7 +317,10 @@ void MpvHttpStreamRelay::startPassThrough(QTcpSocket *socket, const QByteArray &
     }
 
     QNetworkRequest request(m_targetUrl);
-    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+    // Manual redirect handling: the chain downgrades https to http, which the
+    // default policy rejects outright ("Insecure redirect"). mpv understands
+    // the 302 we forward, so let it follow the redirect itself.
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
     if (!rangeHeader.isEmpty())
     {
         request.setRawHeader("Range", rangeHeader);
@@ -520,6 +526,8 @@ void MpvHttpStreamRelay::resetCache()
     m_rangeUnsupported = false;
     m_fetchPos = 0;
     m_fetchLimit = 0;
+    m_redirectTarget.clear();
+    m_redirectDepth = 0;
     m_statFetches = 0;
     m_statBytesFromCache = 0;
     m_statBytesFromUpstream = 0;
@@ -845,8 +853,15 @@ bool MpvHttpStreamRelay::startFetch(qint64 pos)
         return false;
     }
 
-    QNetworkRequest request(m_targetUrl);
-    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+    if (m_redirectTarget.isEmpty())
+    {
+        m_redirectDepth = 0; // a new chain starts from the original URL
+    }
+
+    QNetworkRequest request(effectiveUpstreamUrl());
+    // Resolve redirects by hand: the default policy refuses the https -> http
+    // hop of this server chain, so followRedirect() walks the chain instead.
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
     request.setRawHeader("Range", QByteArray("bytes=") + QByteArray::number(pos) + "-");
     if (!m_upstreamUserAgent.isEmpty())
     {
@@ -928,6 +943,65 @@ void MpvHttpStreamRelay::resumeStalledConnections()
     }
 }
 
+QUrl MpvHttpStreamRelay::effectiveUpstreamUrl() const
+{
+    return m_redirectTarget.isEmpty() ? m_targetUrl : m_redirectTarget;
+}
+
+// Returns true when `reply` carries a redirect that is now being followed, in
+// which case the caller must stop using that reply. Redirects are resolved by
+// hand because QNetworkAccessManager's default policy refuses to downgrade
+// https to http, and this server chain does exactly that
+// (Emby --302--> OpenList --302--> pre-signed object storage).
+bool MpvHttpStreamRelay::followRedirect(QNetworkReply *reply)
+{
+    if (!reply)
+    {
+        return false;
+    }
+
+    const int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    if (statusCode < 300 || statusCode >= 400)
+    {
+        return false;
+    }
+
+    const QByteArray location = reply->rawHeader("Location");
+    if (location.isEmpty())
+    {
+        qWarning() << "[MpvHttpStreamRelay] redirect without a Location header"
+                   << "| status:" << statusCode
+                   << "| url:" << LogRedactionUtils::url(reply->request().url());
+        return false;
+    }
+
+    if (m_redirectDepth >= kMaxRedirects)
+    {
+        qWarning() << "[MpvHttpStreamRelay] too many redirects, giving up"
+                   << "| status:" << statusCode << "| depth:" << m_redirectDepth
+                   << "| url:" << LogRedactionUtils::url(reply->request().url());
+        return false;
+    }
+
+    const QUrl next = reply->request().url().resolved(QUrl::fromEncoded(location));
+    if (!next.isValid() || next.scheme().isEmpty())
+    {
+        qWarning() << "[MpvHttpStreamRelay] unusable redirect target"
+                   << "| location:" << location;
+        return false;
+    }
+
+    ++m_redirectDepth;
+    m_redirectTarget = next;
+
+    qInfo() << "[MpvHttpStreamRelay] following redirect"
+            << "| status:" << statusCode
+            << "| from:" << LogRedactionUtils::url(reply->request().url())
+            << "| to:" << LogRedactionUtils::url(next)
+            << "| depth:" << m_redirectDepth;
+    return true;
+}
+
 void MpvHttpStreamRelay::parseFetchHeaders()
 {
     if (!m_fetch || m_rangeUnsupported || m_totalSize > 0)
@@ -942,6 +1016,18 @@ void MpvHttpStreamRelay::parseFetchHeaders()
     }
 
     m_contentType = m_fetch->rawHeader("Content-Type");
+
+    if (followRedirect(m_fetch))
+    {
+        // Re-issue from the same offset against the resolved target. Deferred,
+        // because aborting a reply from inside its own readyRead handler is not
+        // safe; no payload arrived yet, so m_fetchPos is still the request start.
+        const qint64 resumePos = m_fetchPos;
+        qInfo() << "[MpvHttpStreamRelay] retrying read after redirect"
+                << "| begin:" << resumePos;
+        QTimer::singleShot(0, this, [this, resumePos]() { startFetch(resumePos); });
+        return;
+    }
 
     if (statusCode != 206)
     {
@@ -1063,6 +1149,16 @@ void MpvHttpStreamRelay::onFetchFinished()
         parseFetchHeaders();
     }
 
+    const int finishedStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+
+    // A redirect carries no payload, and parseFetchHeaders() has already
+    // scheduled the retry against the resolved target: never let its body reach
+    // the cache, and never report it as a failed read either.
+    if (m_fetch == reply && finishedStatus >= 300 && finishedStatus < 400)
+    {
+        return;
+    }
+
     if (m_fetch == reply && !m_rangeUnsupported)
     {
         // Drain whatever is left before reporting the failure.
@@ -1087,18 +1183,31 @@ void MpvHttpStreamRelay::onFetchFinished()
 
     if (m_fetch == reply)
     {
-        const int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        const bool failed = statusCode == 0 || (statusCode != 206 && statusCode != 200);
+        // The resolved redirect target is a pre-signed URL (X-Amz-Expires=900),
+        // so it expires: drop it and resolve the chain again from the original
+        // URL instead of handing the failure to mpv.
+        if ((finishedStatus == 401 || finishedStatus == 403) && !m_redirectTarget.isEmpty())
+        {
+            qInfo() << "[MpvHttpStreamRelay] resolved target rejected, re-resolving"
+                    << "| status:" << finishedStatus << "| fetchPos:" << m_fetchPos;
+            m_redirectTarget.clear();
+            m_redirectDepth = 0;
+            releaseFetch();
+            scheduleFetch(m_fetchPos);
+            return;
+        }
+
+        const bool failed = finishedStatus == 0 || (finishedStatus != 206 && finishedStatus != 200);
         if (failed)
         {
             qWarning() << "[MpvHttpStreamRelay] upstream read failed"
-                       << "| status:" << statusCode << "| error:" << reply->errorString()
+                       << "| status:" << finishedStatus << "| error:" << reply->errorString()
                        << "| fetchPos:" << m_fetchPos;
         }
         else
         {
             qDebug() << "[MpvHttpStreamRelay] upstream read finished"
-                     << "| status:" << statusCode << "| fetchPos:" << m_fetchPos
+                     << "| status:" << finishedStatus << "| fetchPos:" << m_fetchPos
                      << "| fetchLimit:" << m_fetchLimit;
         }
 
