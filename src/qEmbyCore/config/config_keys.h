@@ -141,11 +141,24 @@ constexpr const char* PlayerFastStart = "player/fast_start";
 // Next-episode playback-source prefetch trigger: 0 = disabled, otherwise
 // prefetch starts once playback progress reaches this percentage.
 constexpr const char* PlayerPrefetchThreshold = "player/prefetch_threshold";
-// Disk-backed streaming cache: keeps the last-played media's cache files so
-// revisiting it can reuse them. When enabled, the cache is cleared (cache-free)
-// before each new file loads to avoid stale data leaking across media.
+// Disk-backed demuxer cache: when enabled, mpv writes the demuxer cache's
+// packet data to disk instead of RAM (--cache-on-disk), which is what makes a
+// very large demuxer-max-bytes affordable without the same cost in memory. The
+// target directory comes from --demuxer-cache-dir. The cache lives and dies
+// with the demuxer (mpv deletes the files when the media is unloaded), so this
+// is NOT a persistent cache and does not make replaying the same media faster.
 constexpr const char* PlayerDiskCache = "player/disk_cache";
 constexpr const char* PlayerDiskCacheDir = "player/disk_cache_dir";
+// Local HTTP relay in front of mpv (MpvHttpStreamRelay). Enabled by default:
+// it keeps a byte-range cache so a source whose audio track is stored apart
+// from the video (non-interleaved layout) does not pay a network round trip
+// for every audio chunk. Set to false to bypass the relay entirely.
+constexpr const char* PlayerRelayEnabled = "player/relay_enabled"; // bool, default true
+// How far past its start offset one upstream read may go before it stops,
+// in MiB. This is what lets a single request for a far-away region (for
+// example an audio track stored at the end of the file) fill the cache for
+// every follow-up request on that region.
+constexpr const char* PlayerRelayReadaheadMb = "player/relay_readahead_mb"; // int MiB, default 64
 // Advanced mpv tuning (Settings -> Player). All values are read per file by
 // MpvWidget; empty values fall back to mpv defaults.
 constexpr const char* PlayerAudioChannels = "player/audio_channels";              // QString: auto|stereo|mono

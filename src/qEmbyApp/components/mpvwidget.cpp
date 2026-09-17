@@ -345,13 +345,25 @@ void MpvWidget::loadMediaNow(const QString &url, const QString &serverId, bool w
     const QString scheme = loadQUrl.scheme().toLower();
     const bool isHttpStream =
         scheme == QStringLiteral("http") || scheme == QStringLiteral("https");
-    const bool shouldRelay =
-        isHttpStream && proxy.type() != QNetworkProxy::NoProxy;
+    // The relay is a local HTTP proxy that caches byte ranges; it is what makes
+    // sources with a non-interleaved layout (audio stored apart from the video)
+    // play smoothly, because it can answer mpv's small follow-up requests from
+    // memory instead of paying a network round trip for each one. It used to be
+    // enabled only when a proxy was configured, i.e. never for the common
+    // direct-connect case.
+    ConfigStore *relayCfg = ConfigStore::instance();
+    const bool relayEnabled = relayCfg->get<bool>(ConfigKeys::PlayerRelayEnabled, true);
+    const bool shouldRelay = isHttpStream && relayEnabled;
 
     QString playbackUrl = url;
     bool usingRelay = false;
     if (shouldRelay && m_streamRelay) {
-        const QUrl localUrl = m_streamRelay->prepare(loadQUrl, serverId, proxy, m_customUserAgent);
+        const int readaheadMbCfg =
+            relayCfg->get<int>(ConfigKeys::PlayerRelayReadaheadMb, 64);
+        const qint64 readaheadBytes =
+            static_cast<qint64>(readaheadMbCfg > 0 ? readaheadMbCfg : 64) * 1024 * 1024;
+        const QUrl localUrl = m_streamRelay->prepare(loadQUrl, serverId, proxy,
+                                                     m_customUserAgent, readaheadBytes);
         if (localUrl.isValid()) {
             playbackUrl = localUrl.toString(QUrl::FullyEncoded);
             usingRelay = true;

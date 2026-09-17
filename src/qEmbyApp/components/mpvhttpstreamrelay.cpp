@@ -14,19 +14,29 @@
 #include <QTimer>
 #include <QUuid>
 
+#include <algorithm>
+
 namespace
 {
 
 constexpr qint64 kReplyReadBufferBytes = 4 * 1024 * 1024;
 constexpr qint64 kSocketQueuedBytesHighWater = 4 * 1024 * 1024;
 constexpr qint64 kRelayPumpChunkBytes = 256 * 1024;
+constexpr qint64 kFetchChunkBytes = 1024 * 1024;
+constexpr qint64 kDefaultReadaheadBytes = 64 * 1024 * 1024;
+// Memory-only for now; the design in tools/relay-design.md replaces this with
+// a sparse file plus a configurable disk quota.
+constexpr qint64 kCacheMemoryLimitBytes = 256 * 1024 * 1024;
+// While a client is consuming data, keep the upstream read this far ahead of
+// it instead of having to re-issue a request at every limit boundary.
+constexpr qint64 kFetchLimitLowWaterBytes = 8 * 1024 * 1024;
 
 bool canWriteToSocket(QTcpSocket *socket)
 {
     return socket && socket->isOpen() && socket->isWritable() && socket->state() != QAbstractSocket::UnconnectedState;
 }
 
-} 
+} // namespace
 
 MpvHttpStreamRelay::MpvHttpStreamRelay(QObject *parent)
     : QObject(parent), m_server(new QTcpServer(this)), m_network(new QNetworkAccessManager(this)),
@@ -49,7 +59,8 @@ MpvHttpStreamRelay::~MpvHttpStreamRelay()
 }
 
 QUrl MpvHttpStreamRelay::prepare(const QUrl &targetUrl, const QString &serverId,
-                                 const QNetworkProxy &proxy, const QString &userAgent)
+                                 const QNetworkProxy &proxy, const QString &userAgent,
+                                 qint64 readaheadBytes)
 {
     if (!targetUrl.isValid() || targetUrl.scheme().isEmpty())
     {
@@ -70,6 +81,8 @@ QUrl MpvHttpStreamRelay::prepare(const QUrl &targetUrl, const QString &serverId,
     m_upstreamUserAgent = userAgent.trimmed();
     m_network->setProxy(proxy);
     m_bytesRelayedSinceLastTick = 0;
+    m_readaheadBytes = readaheadBytes > 0 ? readaheadBytes : kDefaultReadaheadBytes;
+    resetCache();
     m_speedTimer->start();
 
     QUrl localUrl;
@@ -81,7 +94,8 @@ QUrl MpvHttpStreamRelay::prepare(const QUrl &targetUrl, const QString &serverId,
     qInfo() << "[MpvHttpStreamRelay] prepared"
             << "| target:" << LogRedactionUtils::url(m_targetUrl) << "| local:" << localUrl.toString(QUrl::FullyEncoded)
             << "| serverId:" << (m_serverId.isEmpty() ? QStringLiteral("<none>") : m_serverId)
-            << "| proxyType:" << proxy.type();
+            << "| proxyType:" << proxy.type()
+            << "| readaheadMiB:" << (m_readaheadBytes / (1024 * 1024));
 
     return localUrl;
 }
@@ -107,6 +121,9 @@ void MpvHttpStreamRelay::stop()
     m_targetUrl.clear();
     m_serverId.clear();
     m_streamToken.clear();
+    releaseFetch();
+    m_scheduledFetchPos = -1;
+    resetCache();
 }
 
 void MpvHttpStreamRelay::onNewConnection()
@@ -126,9 +143,23 @@ void MpvHttpStreamRelay::onNewConnection()
         connect(socket, &QTcpSocket::bytesWritten, this,
                 [this, safeSocket](qint64)
                 {
-                    if (safeSocket)
+                    if (!safeSocket)
                     {
-                        pumpReplyToSocket(safeSocket.data());
+                        return;
+                    }
+                    QTcpSocket *socket = safeSocket.data();
+                    auto it = m_connections.find(socket);
+                    if (it == m_connections.end())
+                    {
+                        return;
+                    }
+                    if (it->cacheMode)
+                    {
+                        pumpCacheToSocket(socket);
+                    }
+                    else
+                    {
+                        pumpReplyToSocket(socket);
                     }
                 });
         connect(socket, &QTcpSocket::disconnected, this,
@@ -151,7 +182,7 @@ void MpvHttpStreamRelay::onSocketReadyRead(QTcpSocket *socket)
     }
 
     auto it = m_connections.find(socket);
-    if (it == m_connections.end() || it->reply)
+    if (it == m_connections.end() || it->reply || it->cacheMode)
     {
         return;
     }
@@ -173,6 +204,9 @@ void MpvHttpStreamRelay::onSocketReadyRead(QTcpSocket *socket)
 
 void MpvHttpStreamRelay::onSocketDisconnected(QTcpSocket *socket)
 {
+    // Closing a client must never stop an in-flight upstream read: that read is
+    // what fills the cache for this client's next request (see "finish the
+    // read" in the class comment).
     closeConnection(socket);
 }
 
@@ -207,12 +241,11 @@ void MpvHttpStreamRelay::processRequest(QTcpSocket *socket, const QByteArray &re
         return;
     }
 
-    QNetworkRequest request(m_targetUrl);
-    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
-
+    QByteArray rangeHeader;
+    QByteArray acceptHeader;
     for (int i = 1; i < lines.size(); ++i)
     {
-        QByteArray line = lines.at(i).trimmed();
+        const QByteArray line = lines.at(i).trimmed();
         if (line.isEmpty())
         {
             continue;
@@ -222,25 +255,15 @@ void MpvHttpStreamRelay::processRequest(QTcpSocket *socket, const QByteArray &re
         {
             continue;
         }
-
-        QByteArray name = line.left(colon).trimmed();
-        const QByteArray value = line.mid(colon + 1).trimmed();
-        const QByteArray lowerName = name.toLower();
-        if (lowerName == "host" || isHopByHopHeader(lowerName))
+        const QByteArray lowerName = line.left(colon).trimmed().toLower();
+        if (lowerName == "range")
         {
-            continue;
+            rangeHeader = line.mid(colon + 1).trimmed();
         }
-        if (lowerName == "range" || lowerName == "user-agent" || lowerName == "accept" || lowerName == "icy-metadata")
+        else if (lowerName == "accept")
         {
-            request.setRawHeader(name, value);
+            acceptHeader = line.mid(colon + 1).trimmed();
         }
-    }
-
-    // Strict-UA servers reject the default UA: the custom UA (when set)
-    // overrides whatever mpv sent, otherwise mpv's UA passes through.
-    if (!m_upstreamUserAgent.isEmpty())
-    {
-        request.setHeader(QNetworkRequest::UserAgentHeader, m_upstreamUserAgent);
     }
 
     auto it = m_connections.find(socket);
@@ -248,12 +271,72 @@ void MpvHttpStreamRelay::processRequest(QTcpSocket *socket, const QByteArray &re
     {
         return;
     }
-    it->headOnly = method == "HEAD";
-    it->reply = it->headOnly ? m_network->head(request) : m_network->get(request);
+    const bool headOnly = method == "HEAD";
+    it->headOnly = headOnly;
+    it->originalRange = rangeHeader;
+    it->originalAccept = acceptHeader;
+
+    qint64 begin = 0;
+    qint64 end = -1;
+    const bool hasRange = !rangeHeader.isEmpty() && parseRangeHeader(rangeHeader, &begin, &end);
+
+    if (!headOnly && hasRange && !m_rangeUnsupported)
+    {
+        it->cacheMode = true;
+        it->reqBegin = begin;
+        it->reqEnd = end;
+        it->needPos = begin;
+        it->servedFromCache = 0;
+
+        qDebug() << "[MpvHttpStreamRelay] ranged request"
+                 << "| range:" << rangeHeader << "| begin:" << begin << "| end:" << end;
+
+        pumpCacheToSocket(socket);
+
+        it = m_connections.find(socket);
+        if (it != m_connections.end() && !it->finished && cacheBlockContaining(it->needPos) < 0)
+        {
+            ensureFetchFrom(it->needPos);
+        }
+        return;
+    }
+
+    startPassThrough(socket, rangeHeader, acceptHeader, headOnly);
+}
+
+void MpvHttpStreamRelay::startPassThrough(QTcpSocket *socket, const QByteArray &rangeHeader,
+                                          const QByteArray &acceptHeader, bool headOnly)
+{
+    auto it = m_connections.find(socket);
+    if (it == m_connections.end() || it->reply)
+    {
+        return;
+    }
+
+    QNetworkRequest request(m_targetUrl);
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+    if (!rangeHeader.isEmpty())
+    {
+        request.setRawHeader("Range", rangeHeader);
+    }
+    if (!acceptHeader.isEmpty())
+    {
+        request.setRawHeader("Accept", acceptHeader);
+    }
+    // Strict-UA servers reject the default UA: the custom UA (when set)
+    // overrides whatever mpv sent, otherwise mpv's UA passes through.
+    if (!m_upstreamUserAgent.isEmpty())
+    {
+        request.setHeader(QNetworkRequest::UserAgentHeader, m_upstreamUserAgent);
+    }
+
+    it->headOnly = headOnly;
+    it->reply = headOnly ? m_network->head(request) : m_network->get(request);
     it->reply->setReadBufferSize(kReplyReadBufferBytes);
 
-    qDebug() << "[MpvHttpStreamRelay] request"
-             << "| method:" << method << "| target:" << LogRedactionUtils::url(m_targetUrl)
+    qDebug() << "[MpvHttpStreamRelay] pass-through request"
+             << "| method:" << (headOnly ? "HEAD" : "GET")
+             << "| target:" << LogRedactionUtils::url(m_targetUrl)
              << "| range:" << request.rawHeader("Range");
 
     QNetworkReply *reply = it->reply;
@@ -324,11 +407,6 @@ void MpvHttpStreamRelay::sendReplyHeaders(QTcpSocket *socket)
     {
         statusCode = reply->error() == QNetworkReply::NoError ? 200 : 502;
     }
-
-    qDebug() << "[MpvHttpStreamRelay] response"
-             << "| status:" << statusCode << "| contentRange:" << reply->rawHeader("Content-Range")
-             << "| contentLength:" << reply->rawHeader("Content-Length")
-             << "| acceptRanges:" << reply->rawHeader("Accept-Ranges");
 
     QByteArray response = "HTTP/1.1 " + QByteArray::number(statusCode) + " " + reasonPhrase(statusCode) + "\r\n";
     const auto headerPairs = reply->rawHeaderPairs();
@@ -429,6 +507,661 @@ void MpvHttpStreamRelay::pumpReplyToSocket(QTcpSocket *socket)
     }
 }
 
+// ---------------------------------------------------------------------------
+// Byte-range cache
+// ---------------------------------------------------------------------------
+
+void MpvHttpStreamRelay::resetCache()
+{
+    m_cache.clear();
+    m_cachedBytes = 0;
+    m_totalSize = -1;
+    m_contentType.clear();
+    m_rangeUnsupported = false;
+    m_fetchPos = 0;
+    m_fetchLimit = 0;
+    m_statFetches = 0;
+    m_statBytesFromCache = 0;
+    m_statBytesFromUpstream = 0;
+}
+
+void MpvHttpStreamRelay::recountCachedBytes()
+{
+    qint64 total = 0;
+    for (const CacheBlock &block : m_cache)
+    {
+        total += block.data.size();
+    }
+    m_cachedBytes = total;
+}
+
+void MpvHttpStreamRelay::normalizeCache()
+{
+    if (m_cache.size() < 2)
+    {
+        return;
+    }
+
+    std::sort(m_cache.begin(), m_cache.end(),
+              [](const CacheBlock &a, const CacheBlock &b) { return a.begin < b.begin; });
+
+    QVector<CacheBlock> merged;
+    merged.reserve(m_cache.size());
+    for (const CacheBlock &block : m_cache)
+    {
+        if (block.data.isEmpty())
+        {
+            continue;
+        }
+        if (merged.isEmpty())
+        {
+            merged.append(block);
+            continue;
+        }
+        CacheBlock &last = merged.last();
+        const qint64 lastEnd = last.begin + last.data.size();
+        if (block.begin > lastEnd)
+        {
+            merged.append(block);
+            continue;
+        }
+        // Overlapping or adjacent: keep what we already have and append only
+        // the bytes we are still missing.
+        const qint64 overlap = lastEnd - block.begin;
+        if (overlap < static_cast<qint64>(block.data.size()))
+        {
+            last.data.append(block.data.constData() + overlap, block.data.size() - overlap);
+        }
+    }
+    m_cache = merged;
+}
+
+void MpvHttpStreamRelay::appendToCache(const QByteArray &data)
+{
+    if (data.isEmpty())
+    {
+        return;
+    }
+
+    CacheBlock block;
+    block.begin = m_fetchPos;
+    block.data = data;
+
+    bool mergedIntoPrevious = false;
+    if (!m_cache.isEmpty())
+    {
+        CacheBlock &prev = m_cache.last();
+        const qint64 prevEnd = prev.begin + prev.data.size();
+        if (block.begin >= prev.begin && prevEnd >= block.begin)
+        {
+            const qint64 overlap = prevEnd - block.begin;
+            if (overlap < static_cast<qint64>(block.data.size()))
+            {
+                prev.data.append(block.data.constData() + overlap, block.data.size() - overlap);
+            }
+            mergedIntoPrevious = true;
+        }
+    }
+    if (!mergedIntoPrevious)
+    {
+        m_cache.append(block);
+        normalizeCache();
+    }
+
+    m_fetchPos += data.size();
+    recountCachedBytes();
+    evictCacheIfNeeded();
+}
+
+void MpvHttpStreamRelay::evictCacheIfNeeded()
+{
+    while (m_cachedBytes > kCacheMemoryLimitBytes && m_cache.size() > 1)
+    {
+        int victim = 0;
+        qint64 worstDistance = -1;
+        for (int i = 0; i < m_cache.size(); ++i)
+        {
+            const CacheBlock &block = m_cache.at(i);
+            const qint64 middle = block.begin + block.data.size() / 2;
+            const qint64 distance = qAbs(middle - m_fetchPos);
+            if (distance > worstDistance)
+            {
+                worstDistance = distance;
+                victim = i;
+            }
+        }
+        m_cachedBytes -= m_cache.at(victim).data.size();
+        m_cache.remove(victim);
+    }
+}
+
+int MpvHttpStreamRelay::cacheBlockContaining(qint64 pos) const
+{
+    int lo = 0;
+    int hi = m_cache.size();
+    while (lo < hi)
+    {
+        const int mid = (lo + hi) / 2;
+        if (m_cache.at(mid).begin <= pos)
+        {
+            lo = mid + 1;
+        }
+        else
+        {
+            hi = mid;
+        }
+    }
+    if (lo == 0)
+    {
+        return -1;
+    }
+    const int index = lo - 1;
+    const CacheBlock &block = m_cache.at(index);
+    const qint64 offset = pos - block.begin;
+    if (offset < 0 || offset >= static_cast<qint64>(block.data.size()))
+    {
+        return -1;
+    }
+    return index;
+}
+
+void MpvHttpStreamRelay::sendCacheHeaders(QTcpSocket *socket)
+{
+    auto it = m_connections.find(socket);
+    if (it == m_connections.end() || it->headersSent || !canWriteToSocket(socket))
+    {
+        return;
+    }
+    if (m_totalSize <= 0)
+    {
+        return; // upstream headers have not arrived yet
+    }
+
+    const qint64 begin = it->reqBegin;
+    const qint64 end = (it->reqEnd >= 0) ? qMin(it->reqEnd, m_totalSize - 1) : (m_totalSize - 1);
+    if (end < begin)
+    {
+        writeError(socket, 416, "Requested range not satisfiable");
+        return;
+    }
+
+    QByteArray response = "HTTP/1.1 206 Partial Content\r\n";
+    response += "Content-Range: bytes " + QByteArray::number(begin) + "-" + QByteArray::number(end) +
+                "/" + QByteArray::number(m_totalSize) + "\r\n";
+    response += "Content-Length: " + QByteArray::number(end - begin + 1) + "\r\n";
+    if (!m_contentType.isEmpty())
+    {
+        response += "Content-Type: " + m_contentType + "\r\n";
+    }
+    response += "Accept-Ranges: bytes\r\n";
+    response += "Connection: close\r\n";
+    response += "\r\n";
+
+    if (socket->write(response) >= 0)
+    {
+        it->headersSent = true;
+    }
+}
+
+void MpvHttpStreamRelay::pumpCacheToSocket(QTcpSocket *socket)
+{
+    if (!socket)
+    {
+        return;
+    }
+
+    for (;;)
+    {
+        auto it = m_connections.find(socket);
+        if (it == m_connections.end() || !it->cacheMode || it->finished)
+        {
+            return;
+        }
+        if (!canWriteToSocket(socket))
+        {
+            closeConnection(socket);
+            return;
+        }
+        if (m_totalSize <= 0)
+        {
+            return; // wait for the upstream headers before answering
+        }
+
+        sendCacheHeaders(socket);
+        it = m_connections.find(socket);
+        if (it == m_connections.end() || it->finished)
+        {
+            return;
+        }
+
+        const int blockIndex = cacheBlockContaining(it->needPos);
+        if (blockIndex < 0)
+        {
+            // Nothing cached at needPos yet: make sure an upstream read is on
+            // its way (no-op when the in-flight read already covers it).
+            ensureFetchFrom(it->needPos);
+            return;
+        }
+
+        const CacheBlock &block = m_cache.at(blockIndex);
+        const qint64 offset = it->needPos - block.begin;
+        const qint64 wantEnd = (it->reqEnd >= 0) ? qMin(it->reqEnd, m_totalSize - 1) : (m_totalSize - 1);
+
+        qint64 available = static_cast<qint64>(block.data.size()) - offset;
+        available = qMin(available, wantEnd - it->needPos + 1);
+        if (available <= 0)
+        {
+            if (it->needPos > wantEnd)
+            {
+                finishCacheConnection(socket);
+            }
+            return;
+        }
+
+        const qint64 budget = kSocketQueuedBytesHighWater - socket->bytesToWrite();
+        if (budget <= 0)
+        {
+            return;
+        }
+        const qint64 chunkSize = qMin(available, qMin(kRelayPumpChunkBytes, budget));
+        const qint64 written = socket->write(block.data.constData() + offset, chunkSize);
+        if (written <= 0)
+        {
+            return;
+        }
+        recordRelayedBytes(written);
+        m_statBytesFromCache += written;
+
+        it = m_connections.find(socket);
+        if (it == m_connections.end() || it->finished)
+        {
+            return;
+        }
+        it->needPos += written;
+        it->servedFromCache += written;
+
+        // Keep the upstream read ahead of an actively consuming client so a
+        // sequential read never has to restart the transfer.
+        if (m_fetch && !m_fetch->isFinished() &&
+            it->needPos + kFetchLimitLowWaterBytes > m_fetchLimit)
+        {
+            m_fetchLimit = it->needPos + m_readaheadBytes;
+        }
+
+        if (it->needPos > wantEnd)
+        {
+            finishCacheConnection(socket);
+            return;
+        }
+        if (written < chunkSize)
+        {
+            return; // socket back-pressure, resume on bytesWritten
+        }
+    }
+}
+
+void MpvHttpStreamRelay::finishCacheConnection(QTcpSocket *socket)
+{
+    auto it = m_connections.find(socket);
+    if (it == m_connections.end() || it->finished)
+    {
+        return;
+    }
+    it->finished = true;
+
+    qDebug() << "[MpvHttpStreamRelay] client done"
+             << "| begin:" << it->reqBegin << "| end:" << it->reqEnd
+             << "| sent:" << (it->needPos - it->reqBegin)
+             << "| fromCache:" << it->servedFromCache;
+
+    if (socket->state() != QAbstractSocket::UnconnectedState)
+    {
+        socket->disconnectFromHost();
+    }
+    else
+    {
+        closeConnection(socket);
+    }
+}
+
+void MpvHttpStreamRelay::broadcastCachedData()
+{
+    const auto sockets = m_connections.keys();
+    for (QTcpSocket *socket : sockets)
+    {
+        pumpCacheToSocket(socket);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Shared upstream read ("finish the read")
+// ---------------------------------------------------------------------------
+
+bool MpvHttpStreamRelay::startFetch(qint64 pos)
+{
+    releaseFetch();
+    if (m_targetUrl.isEmpty() || m_rangeUnsupported)
+    {
+        return false;
+    }
+
+    QNetworkRequest request(m_targetUrl);
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+    request.setRawHeader("Range", QByteArray("bytes=") + QByteArray::number(pos) + "-");
+    if (!m_upstreamUserAgent.isEmpty())
+    {
+        request.setHeader(QNetworkRequest::UserAgentHeader, m_upstreamUserAgent);
+    }
+
+    m_fetch = m_network->get(request);
+    m_fetch->setReadBufferSize(kReplyReadBufferBytes);
+    m_fetchPos = pos;
+    m_fetchLimit = pos + m_readaheadBytes;
+    ++m_statFetches;
+
+    qInfo() << "[MpvHttpStreamRelay] upstream fetch"
+            << "| begin:" << pos << "| limit:" << m_fetchLimit
+            << "| fetchCount:" << m_statFetches;
+
+    connect(m_fetch, &QNetworkReply::readyRead, this, [this]() { onFetchReadyRead(); });
+    connect(m_fetch, &QNetworkReply::finished, this, [this]() { onFetchFinished(); });
+    return true;
+}
+
+void MpvHttpStreamRelay::scheduleFetch(qint64 pos)
+{
+    m_scheduledFetchPos = pos;
+    if (m_schedulePending)
+    {
+        return;
+    }
+    m_schedulePending = true;
+    // Never abort or restart a reply from inside its own readyRead handler:
+    // defer the (re)start to the next event loop turn.
+    QTimer::singleShot(0, this, [this]() { runScheduledFetch(); });
+}
+
+void MpvHttpStreamRelay::runScheduledFetch()
+{
+    m_schedulePending = false;
+    const qint64 pos = m_scheduledFetchPos;
+    m_scheduledFetchPos = -1;
+    if (pos < 0 || m_rangeUnsupported || m_targetUrl.isEmpty())
+    {
+        return;
+    }
+    if (m_fetch && !m_fetch->isFinished() && pos >= m_fetchPos && pos < m_fetchLimit)
+    {
+        return; // the in-flight read already covers this offset
+    }
+    startFetch(pos);
+}
+
+void MpvHttpStreamRelay::ensureFetchFrom(qint64 pos)
+{
+    if (m_rangeUnsupported)
+    {
+        return;
+    }
+    if (m_fetch && !m_fetch->isFinished() && pos >= m_fetchPos && pos < m_fetchLimit)
+    {
+        return;
+    }
+    scheduleFetch(pos);
+}
+
+void MpvHttpStreamRelay::resumeStalledConnections()
+{
+    const auto sockets = m_connections.keys();
+    for (QTcpSocket *socket : sockets)
+    {
+        auto it = m_connections.find(socket);
+        if (it == m_connections.end() || !it->cacheMode || it->finished)
+        {
+            continue;
+        }
+        if (cacheBlockContaining(it->needPos) < 0)
+        {
+            ensureFetchFrom(it->needPos);
+            return;
+        }
+    }
+}
+
+void MpvHttpStreamRelay::parseFetchHeaders()
+{
+    if (!m_fetch || m_rangeUnsupported || m_totalSize > 0)
+    {
+        return;
+    }
+
+    const int statusCode = m_fetch->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    if (statusCode == 0)
+    {
+        return; // no response yet
+    }
+
+    m_contentType = m_fetch->rawHeader("Content-Type");
+
+    if (statusCode != 206)
+    {
+        // Either the upstream ignored our Range request (HTTP 200) or it
+        // failed outright. Caching byte ranges is impossible in both cases, so
+        // fall back to the plain pass-through behaviour.
+        m_rangeUnsupported = true;
+        qWarning() << "[MpvHttpStreamRelay] unusable upstream response, falling back to pass-through"
+                   << "| status:" << statusCode
+                   << "| target:" << LogRedactionUtils::url(m_targetUrl)
+                   << "| error:" << m_fetch->errorString();
+        QTimer::singleShot(0, this,
+                           [this]()
+                           {
+                               releaseFetch();
+                               demoteToPassThrough();
+                           });
+        return;
+    }
+
+    const QByteArray contentRange = m_fetch->rawHeader("Content-Range");
+    const int slash = contentRange.lastIndexOf('/');
+    if (slash > 0)
+    {
+        bool ok = false;
+        const qint64 total = contentRange.mid(slash + 1).trimmed().toLongLong(&ok);
+        if (ok && total > 0)
+        {
+            m_totalSize = total;
+        }
+    }
+
+    // The server may answer from a slightly different offset than we asked
+    // for; trust the header, since that is where the payload actually starts.
+    const int space = contentRange.indexOf(' ');
+    const int dash = contentRange.indexOf('-');
+    if (space >= 0 && dash > space)
+    {
+        bool ok = false;
+        const qint64 serverBegin = contentRange.mid(space + 1, dash - space - 1).toLongLong(&ok);
+        if (ok && serverBegin >= 0 && serverBegin != m_fetchPos)
+        {
+            qWarning() << "[MpvHttpStreamRelay] upstream served a different offset"
+                       << "| requested:" << m_fetchPos << "| served:" << serverBegin;
+            m_fetchPos = serverBegin;
+        }
+    }
+
+    qInfo() << "[MpvHttpStreamRelay] upstream ready"
+            << "| status:" << statusCode << "| totalSize:" << m_totalSize
+            << "| contentRange:" << contentRange
+            << "| contentType:" << m_contentType;
+}
+
+void MpvHttpStreamRelay::onFetchReadyRead()
+{
+    if (!m_fetch)
+    {
+        return;
+    }
+    if (m_totalSize <= 0)
+    {
+        parseFetchHeaders();
+    }
+    if (!m_fetch || m_rangeUnsupported)
+    {
+        return;
+    }
+
+    for (;;)
+    {
+        if (!m_fetch)
+        {
+            break;
+        }
+        if (m_fetch->bytesAvailable() <= 0)
+        {
+            return;
+        }
+        if (m_fetchPos >= m_fetchLimit)
+        {
+            // "Finish the read" finished: the read-ahead window is full.
+            qDebug() << "[MpvHttpStreamRelay] read-ahead window reached"
+                     << "| fetchPos:" << m_fetchPos << "| cachedBytes:" << m_cachedBytes;
+            releaseFetch();
+            break;
+        }
+
+        const qint64 budget = m_fetchLimit - m_fetchPos;
+        const qint64 readSize = qMin(kFetchChunkBytes, qMin(budget, m_fetch->bytesAvailable()));
+        if (readSize <= 0)
+        {
+            break;
+        }
+        const QByteArray chunk = m_fetch->read(readSize);
+        if (chunk.isEmpty())
+        {
+            break;
+        }
+
+        appendToCache(chunk);
+        m_statBytesFromUpstream += chunk.size();
+        broadcastCachedData();
+    }
+
+    resumeStalledConnections();
+}
+
+void MpvHttpStreamRelay::onFetchFinished()
+{
+    if (!m_fetch)
+    {
+        return;
+    }
+
+    QNetworkReply *reply = m_fetch;
+    if (m_totalSize <= 0)
+    {
+        parseFetchHeaders();
+    }
+
+    if (m_fetch == reply && !m_rangeUnsupported)
+    {
+        // Drain whatever is left before reporting the failure.
+        while (reply->bytesAvailable() > 0 && m_fetchPos < m_fetchLimit)
+        {
+            const qint64 budget = m_fetchLimit - m_fetchPos;
+            const qint64 readSize = qMin(kFetchChunkBytes, qMin(budget, reply->bytesAvailable()));
+            if (readSize <= 0)
+            {
+                break;
+            }
+            const QByteArray chunk = reply->read(readSize);
+            if (chunk.isEmpty())
+            {
+                break;
+            }
+            appendToCache(chunk);
+            m_statBytesFromUpstream += chunk.size();
+            broadcastCachedData();
+        }
+    }
+
+    if (m_fetch == reply)
+    {
+        const int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        const bool failed = statusCode == 0 || (statusCode != 206 && statusCode != 200);
+        if (failed)
+        {
+            qWarning() << "[MpvHttpStreamRelay] upstream read failed"
+                       << "| status:" << statusCode << "| error:" << reply->errorString()
+                       << "| fetchPos:" << m_fetchPos;
+        }
+        else
+        {
+            qDebug() << "[MpvHttpStreamRelay] upstream read finished"
+                     << "| status:" << statusCode << "| fetchPos:" << m_fetchPos
+                     << "| fetchLimit:" << m_fetchLimit;
+        }
+
+        if (failed)
+        {
+            const auto sockets = m_connections.keys();
+            for (QTcpSocket *socket : sockets)
+            {
+                auto it = m_connections.find(socket);
+                if (it == m_connections.end() || !it->cacheMode || it->finished)
+                {
+                    continue;
+                }
+                if (!it->headersSent)
+                {
+                    writeError(socket, 502, "Upstream read failed");
+                }
+                else
+                {
+                    closeConnection(socket);
+                }
+            }
+        }
+        releaseFetch();
+    }
+
+    resumeStalledConnections();
+}
+
+void MpvHttpStreamRelay::releaseFetch()
+{
+    if (!m_fetch)
+    {
+        return;
+    }
+    QNetworkReply *reply = m_fetch;
+    m_fetch = nullptr;
+    disconnect(reply, nullptr, this, nullptr);
+    if (!reply->isFinished())
+    {
+        reply->abort();
+    }
+    reply->deleteLater();
+}
+
+void MpvHttpStreamRelay::demoteToPassThrough()
+{
+    const auto sockets = m_connections.keys();
+    for (QTcpSocket *socket : sockets)
+    {
+        auto it = m_connections.find(socket);
+        if (it == m_connections.end() || !it->cacheMode || it->finished || it->headersSent)
+        {
+            continue;
+        }
+        it->cacheMode = false;
+        it->needPos = it->reqBegin;
+        startPassThrough(socket, it->originalRange, it->originalAccept, it->headOnly);
+    }
+}
+
+// ---------------------------------------------------------------------------
+
 void MpvHttpStreamRelay::writeError(QTcpSocket *socket, int statusCode, const QByteArray &message)
 {
     if (!socket)
@@ -464,6 +1197,7 @@ void MpvHttpStreamRelay::closeConnection(QTcpSocket *socket)
     if (it != m_connections.end())
     {
         QNetworkReply *reply = it->reply;
+        const bool wasCacheMode = it->cacheMode;
         it->reply = nullptr;
         m_connections.erase(it);
 
@@ -475,6 +1209,15 @@ void MpvHttpStreamRelay::closeConnection(QTcpSocket *socket)
                 reply->abort();
             }
             reply->deleteLater();
+        }
+
+        if (wasCacheMode)
+        {
+            qDebug() << "[MpvHttpStreamRelay] client closed"
+                     << "| cachedBytes:" << m_cachedBytes
+                     << "| statFetches:" << m_statFetches
+                     << "| bytesFromCache:" << m_statBytesFromCache
+                     << "| bytesFromUpstream:" << m_statBytesFromUpstream;
         }
     }
 
@@ -494,6 +1237,63 @@ void MpvHttpStreamRelay::recordRelayedBytes(qint64 bytes)
     }
 }
 
+bool MpvHttpStreamRelay::parseRangeHeader(const QByteArray &value, qint64 *begin, qint64 *end) const
+{
+    const QByteArray trimmed = value.trimmed();
+    if (!trimmed.startsWith("bytes="))
+    {
+        return false;
+    }
+    const QByteArray spec = trimmed.mid(6).trimmed();
+    const int comma = spec.indexOf(',');
+    const QByteArray single = (comma >= 0) ? spec.left(comma) : spec;
+    const int dash = single.indexOf('-');
+    if (dash < 0)
+    {
+        return false;
+    }
+
+    const QByteArray left = single.left(dash).trimmed();
+    const QByteArray right = single.mid(dash + 1).trimmed();
+    bool ok = false;
+
+    if (left.isEmpty())
+    {
+        // Suffix range ("bytes=-N"): needs the total size, which we only know
+        // once the upstream headers have been seen.
+        if (m_totalSize <= 0)
+        {
+            return false;
+        }
+        const qint64 suffix = right.toLongLong(&ok);
+        if (!ok || suffix <= 0)
+        {
+            return false;
+        }
+        *begin = qMax<qint64>(0, m_totalSize - suffix);
+        *end = m_totalSize - 1;
+        return true;
+    }
+
+    const qint64 parsedBegin = left.toLongLong(&ok);
+    if (!ok || parsedBegin < 0)
+    {
+        return false;
+    }
+    qint64 parsedEnd = -1;
+    if (!right.isEmpty())
+    {
+        parsedEnd = right.toLongLong(&ok);
+        if (!ok || parsedEnd < parsedBegin)
+        {
+            return false;
+        }
+    }
+    *begin = parsedBegin;
+    *end = parsedEnd;
+    return true;
+}
+
 QByteArray MpvHttpStreamRelay::reasonPhrase(int statusCode)
 {
     switch (statusCode)
@@ -506,6 +1306,8 @@ QByteArray MpvHttpStreamRelay::reasonPhrase(int statusCode)
         return "Bad Request";
     case 404:
         return "Not Found";
+    case 416:
+        return "Range Not Satisfiable";
     case 431:
         return "Request Header Fields Too Large";
     case 502:
