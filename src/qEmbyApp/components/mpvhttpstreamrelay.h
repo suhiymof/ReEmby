@@ -97,7 +97,9 @@ private:
         qint64 requestNs = 0;
         qint64 headersNs = 0;
         qint64 writtenBytes = 0;
-        int pumpWrites = 0;
+        int pumpWrites = 0;           // write iterations inside one pump pass
+        int pumpCalls = 0;            // how many times pumpCacheToSocket ran
+        qint64 lastPumpReturnNs = 0;  // when the last pump pass returned
     };
 
     void onNewConnection();
@@ -119,6 +121,7 @@ private:
     void evictCacheIfNeeded();
     int cacheBlockContaining(qint64 pos) const;
     void pumpCacheToSocket(QTcpSocket *socket);
+    void pumpCacheToSocketImpl(QTcpSocket *socket);
     void sendCacheHeaders(QTcpSocket *socket);
     void finishCacheConnection(QTcpSocket *socket);
     void broadcastCachedData();
@@ -222,6 +225,17 @@ private:
     // per-connection cost, summed over every invocation (nanoseconds).
     qint64 m_statPumpNs = 0;  // pumpCacheToSocket, including its turnarounds
     qint64 m_statWriteNs = 0; // QAbstractSocket::write() only
+    // Per-connection fixed cost: everything that is paid once per accepted
+    // connection regardless of how many bytes it transfers. With ~500
+    // connections/second this is what dominates once the byte shuffling is
+    // under control.
+    qint64 m_statAcceptInitNs = 0; // nextPendingConnection() + signal wiring
+    qint64 m_statAcceptInitCount = 0;
+    qint64 m_statCloseNs = 0;      // closeConnection cleanup, first call per socket
+    qint64 m_statCloseCount = 0;
+    qint64 m_statTurnaroundNs = 0; // pump pass return -> next bytesWritten
+    qint64 m_statTurnarounds = 0;
+    qint64 m_statPumpCalls = 0;
     qint64 m_statRedirects = 0;      // client connections handed back to upstream
 };
 

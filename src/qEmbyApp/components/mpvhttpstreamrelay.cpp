@@ -212,8 +212,8 @@ void MpvHttpStreamRelay::onNewConnection()
 {
     while (QTcpSocket *socket = m_server->nextPendingConnection())
     {
+        const qint64 acceptInitStartNs = monotonicNs();
         auto inserted = m_connections.insert(socket, ConnectionState{});
-        inserted->acceptedNs = monotonicNs();
         QPointer<QTcpSocket> safeSocket(socket);
         connect(socket, &QTcpSocket::readyRead, this,
                 [this, safeSocket]()
@@ -236,6 +236,14 @@ void MpvHttpStreamRelay::onNewConnection()
                     {
                         return;
                     }
+                    if (it->lastPumpReturnNs > 0)
+                    {
+                        // How long the socket needed before it would take more
+                        // (the per-pass event-loop turnaround).
+                        m_statTurnaroundNs += monotonicNs() - it->lastPumpReturnNs;
+                        ++m_statTurnarounds;
+                        it->lastPumpReturnNs = 0;
+                    }
                     if (it->cacheMode)
                     {
                         pumpCacheToSocket(socket);
@@ -253,6 +261,9 @@ void MpvHttpStreamRelay::onNewConnection()
                         onSocketDisconnected(safeSocket.data());
                     }
                 });
+        inserted->acceptedNs = monotonicNs();
+        m_statAcceptInitNs += inserted->acceptedNs - acceptInitStartNs;
+        ++m_statAcceptInitCount;
     }
 }
 
@@ -643,6 +654,13 @@ void MpvHttpStreamRelay::resetCache()
     m_statDiscardedBytes = 0;
     m_statPumpNs = 0;
     m_statWriteNs = 0;
+    m_statAcceptInitNs = 0;
+    m_statAcceptInitCount = 0;
+    m_statCloseNs = 0;
+    m_statCloseCount = 0;
+    m_statTurnaroundNs = 0;
+    m_statTurnarounds = 0;
+    m_statPumpCalls = 0;
     m_statRedirects = 0;
 }
 
@@ -826,6 +844,30 @@ void MpvHttpStreamRelay::sendCacheHeaders(QTcpSocket *socket)
 }
 
 void MpvHttpStreamRelay::pumpCacheToSocket(QTcpSocket *socket)
+{
+    if (!socket)
+    {
+        return;
+    }
+    auto entry = m_connections.find(socket);
+    if (entry != m_connections.end())
+    {
+        ++entry->pumpCalls;
+        ++m_statPumpCalls;
+    }
+
+    pumpCacheToSocketImpl(socket);
+
+    // Stamp the return so the next bytesWritten can tell how long the socket
+    // needed before it would accept more.
+    auto after = m_connections.find(socket);
+    if (after != m_connections.end())
+    {
+        after->lastPumpReturnNs = monotonicNs();
+    }
+}
+
+void MpvHttpStreamRelay::pumpCacheToSocketImpl(QTcpSocket *socket)
 {
     if (!socket)
     {
@@ -1581,9 +1623,12 @@ void MpvHttpStreamRelay::closeConnection(QTcpSocket *socket)
         return;
     }
 
+    const qint64 closeStartNs = monotonicNs();
+    bool firstCall = false;
     auto it = m_connections.find(socket);
     if (it != m_connections.end())
     {
+        firstCall = true;
         QNetworkReply *reply = it->reply;
         const bool wasCacheMode = it->cacheMode;
         // Snapshot the diagnostics while the entry is still alive.
@@ -1643,6 +1688,13 @@ void MpvHttpStreamRelay::closeConnection(QTcpSocket *socket)
         socket->disconnectFromHost();
     }
     socket->deleteLater();
+    if (firstCall)
+    {
+        // The actual destruction happens later via deleteLater(); this measures
+        // the bookkeeping we do synchronously on the way out.
+        m_statCloseNs += monotonicNs() - closeStartNs;
+        ++m_statCloseCount;
+    }
 }
 
 void MpvHttpStreamRelay::recordRelayedBytes(qint64 bytes)
@@ -1670,6 +1722,16 @@ void MpvHttpStreamRelay::logActivitySummary()
              << "| headersToDoneUs:" << (m_statHeadersToDoneNs / timed / 1000)
              << "| pumpCpuUs:" << (m_statPumpNs / connections / 1000)
              << "| writeCpuUs:" << (m_statWriteNs / connections / 1000)
+             // Per-connection fixed cost: paid once per accepted connection no
+             // matter how many bytes it moves. At ~500 connections/second this
+             // is the part that does not shrink when the byte count shrinks.
+             << "| accepts:" << m_statAcceptInitCount
+             << "| acceptInitUs:" << (m_statAcceptInitNs / qMax<qint64>(1, m_statAcceptInitCount) / 1000)
+             << "| closes:" << m_statCloseCount
+             << "| closeUs:" << (m_statCloseNs / qMax<qint64>(1, m_statCloseCount) / 1000)
+             << "| pumpCallsPerConn:" << (m_statPumpCalls / connections)
+             << "| turnarounds:" << m_statTurnarounds
+             << "| turnaroundUs:" << (m_statTurnaroundNs / qMax<qint64>(1, m_statTurnarounds) / 1000)
              << "| cachedBytes:" << m_cachedBytes
              << "| redirects:" << m_statRedirects
              << "| fetches:" << m_statFetches
