@@ -3490,6 +3490,14 @@ This action cannot be undone.</source>
         <translation>降低初始缓冲要求，让播放更早开始；网络不佳时可能短暂卡顿</translation>
     </message>
     <message>
+        <source>Compatibility Relay</source>
+        <translation>兼容中继</translation>
+    </message>
+    <message>
+        <source>Turn on only if a source keeps stuttering while other files play smoothly; it adds a local proxy and uses more CPU</source>
+        <translation>仅当某个片源持续卡顿而其他文件播放正常时才开启；会引入本地代理并增加 CPU 占用</translation>
+    </message>
+    <message>
         <source>Prefetch Next Episode</source>
         <translation>预加载下一集</translation>
     </message>

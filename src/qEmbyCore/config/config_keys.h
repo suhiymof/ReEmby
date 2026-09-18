@@ -149,11 +149,17 @@ constexpr const char* PlayerPrefetchThreshold = "player/prefetch_threshold";
 // is NOT a persistent cache and does not make replaying the same media faster.
 constexpr const char* PlayerDiskCache = "player/disk_cache";
 constexpr const char* PlayerDiskCacheDir = "player/disk_cache_dir";
-// Local HTTP relay in front of mpv (MpvHttpStreamRelay). Enabled by default:
-// it keeps a byte-range cache so a source whose audio track is stored apart
-// from the video (non-interleaved layout) does not pay a network round trip
-// for every audio chunk. Set to false to bypass the relay entirely.
-constexpr const char* PlayerRelayEnabled = "player/relay_enabled"; // bool, default true
+// Local HTTP relay in front of mpv (MpvHttpStreamRelay). Disabled by default:
+// the sources it helps are the minority (audio track stored apart from the
+// video, i.e. a non-interleaved layout) and for a normally interleaved file
+// the relay is pure overhead -- an extra local hop plus its own thread for a
+// request pattern that was already sequential. Turning it on keeps a
+// byte-range cache so those odd sources do not pay a network round trip for
+// every audio chunk, at the cost of a local proxy that can be seen burning a
+// core while it serves the resulting request storm. When this is false the
+// relay is not merely idling: it is never created, so mpv talks to the
+// original upstream URL with no local hop at all.
+constexpr const char* PlayerRelayEnabled = "player/relay_enabled"; // bool, default false
 // How far past its start offset one upstream read may go before it stops,
 // in MiB. This is what lets a single request for a far-away region (for
 // example an audio track stored at the end of the file) fill the cache for

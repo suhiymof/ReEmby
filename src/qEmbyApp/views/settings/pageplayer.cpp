@@ -151,6 +151,19 @@ PagePlayer::PagePlayer(QEmbyCore *core, QWidget *parent)
       new ModernSwitch(this), ConfigKeys::PlayerFastStart, this,
       QVariant(false)));
 
+  // Compatibility relay: a local HTTP proxy that caches byte ranges so mpv
+  // does not pay a network round trip for every small follow-up request.
+  // Needed only for sources whose audio track is stored apart from the video
+  // (non-interleaved layout); for a normally interleaved file it is pure
+  // overhead. Off by default: when disabled the relay is never created and
+  // mpv talks to the server directly.
+  m_mainLayout->addWidget(new SettingsCard(
+      ":/svg/dark/hw-decode.svg", tr("Compatibility Relay"),
+      tr("Turn on only if a source keeps stuttering while other files play "
+         "smoothly; it adds a local proxy and uses more CPU"),
+      new ModernSwitch(this), ConfigKeys::PlayerRelayEnabled, this,
+      QVariant(false)));
+
   // Next-episode prefetch: slider 0-100 (0 = disabled). Value is read into
   // PlayerView at playback start, so a new value applies to the next media.
   {

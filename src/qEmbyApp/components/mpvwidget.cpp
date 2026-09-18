@@ -382,11 +382,12 @@ void MpvWidget::loadMediaNow(const QString &url, const QString &serverId, bool w
     // The relay is a local HTTP proxy that caches byte ranges; it is what makes
     // sources with a non-interleaved layout (audio stored apart from the video)
     // play smoothly, because it can answer mpv's small follow-up requests from
-    // memory instead of paying a network round trip for each one. It used to be
-    // enabled only when a proxy was configured, i.e. never for the common
-    // direct-connect case.
+    // memory instead of paying a network round trip for each one. Those sources
+    // are the minority, and for a normally interleaved file the relay is pure
+    // overhead (a local hop plus its own thread for an already-sequential read
+    // pattern), so it is off unless the user turns it on for such a file.
     ConfigStore *relayCfg = ConfigStore::instance();
-    const bool relayEnabled = relayCfg->get<bool>(ConfigKeys::PlayerRelayEnabled, true);
+    const bool relayEnabled = relayCfg->get<bool>(ConfigKeys::PlayerRelayEnabled, false);
     const bool shouldRelay = isHttpStream && relayEnabled;
 
     QString playbackUrl = url;
