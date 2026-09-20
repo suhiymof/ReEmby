@@ -140,7 +140,14 @@ jobs:
           rm -rf dist/ReEmby-win-x64
           mkdir -p dist/ReEmby-win-x64
           cp -r build/bin/Release/* dist/ReEmby-win-x64/
-          7z a -t7z -mx=9 "dist/ReEmby-${VER}-win-x64.7z" ./dist/ReEmby-win-x64
+          # 必须 cd 进 dist/ 再打包：7z 会原样保留传入路径，若写 ./dist/ReEmby-win-x64
+          # 则压缩包内部会多出一层 dist/。这里传裸目录名，保证内部顶层恰好是
+          # ReEmby-win-x64/（原命令用通配符 Release/* 会丢掉路径，所以是散文件）。
+          ( cd dist && 7z a -t7z -mx=9 "ReEmby-${VER}-win-x64.7z" ReEmby-win-x64 )
+          # 把压缩包内的顶层目录名打印出来，便于在 CI 日志里核对该步骤的效果
+          echo "--- archive top-level entries ---"
+          7z l -ba "dist/ReEmby-${VER}-win-x64.7z" | awk 'NF {print $NF}' | sed 's|/.*||' | sort -u | head -5
+          echo "--- end ---"
           echo "QEMBY_VERSION=${VER}" >> "$GITHUB_ENV"
 
       # 直接上传「解压即用的目录」，不再套一层 .7z：
