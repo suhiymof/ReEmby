@@ -53,11 +53,17 @@
 
 ## 🚀 Fork 改动（相比上游 qEmby）
 
-- 🎬 **杜比视界（Dolby Vision）片源自动切换独立播放窗口** —— 内嵌渲染无法正确处理 DV 色彩空间（发绿），检测到纯 DV 片源时自动改走独立窗口播放
-- 📝 **副字幕（第二字幕轨）支持** —— 独立的轨道选择 / 位置 / 缩放 / 延迟，可与主字幕、弹幕同时显示
+在保留上游全部能力的基础上，本 fork 新增了以下功能：
+
+- 💬 **弹幕系统** —— 多源搜索与匹配（弹弹Play、danmu_api 等）、原生覆盖层渲染、逐集匹配，以及独立的显示与过滤设置
+- 📝 **副字幕（第二字幕轨）** —— 独立的轨道选择 / 位置 / 缩放 / 延迟，可与主字幕、弹幕同时显示
+- 🎬 **杜比视界片源自动切换独立窗口** —— 检测到纯 DV 片源时自动改走独立窗口播放
 - 🖥️ **独立播放窗口的透明 HUD 覆盖层** —— 播放控制、弹幕、字幕菜单等覆盖层与内嵌模式体验一致，且不遮挡画面
-- 📦 **绿色便携数据目录** —— 数据统一存放在程序目录下的 `config` 文件夹（旧版为系统 AppData 目录）
-- 🔧 上游之后的大量修复与打磨：字幕轨道选中同步、弹幕渲染与菜单、内存与日志、中文翻译补全等
+- ⏭️ **片头片尾跳过** —— 支持手动设置时长，并按剧集记忆
+- 🗂️ **多服务器聚合视图** —— 将多个服务器的媒体库合并浏览
+- 📺 **Trakt 集成** —— 授权登录与观看记录同步
+- ☁️ **WebDAV 支持** / 🔄 **配置同步** / 🌐 **法语本地化**
+- 🔧 大量细节打磨：字幕轨道选中同步、播放器交互、主题与样式、内存与日志
 
 ## ✨ 功能特性
 
@@ -235,11 +241,17 @@ Grab the latest build from the [Releases](https://github.com/suhiymof/ReEmby/rel
 
 ## 🚀 Fork Changes (vs. upstream qEmby)
 
-- 🎬 **Dolby Vision sources automatically switch to the independent player window** — the embedded renderer cannot handle DV color (green tint), so pure-DV sources are routed to the detached window
-- 📝 **Secondary subtitle support** — separate track / position / scale / delay, shown alongside the primary subtitle and danmaku
+Building on everything upstream provides, this fork adds the following features:
+
+- 💬 **Danmaku (bullet comment) system** — multi-provider search & matching (DandanPlay, danmu_api, ...), native overlay rendering, per-episode matching, plus dedicated display and filter settings
+- 📝 **Secondary subtitle track** — independent track / position / scale / delay, shown alongside the primary subtitle and danmaku
+- 🎬 **Automatic independent window for Dolby Vision sources** — pure-DV sources are routed to the detached window
 - 🖥️ **Translucent HUD overlay for the independent window** — playback controls, danmaku and subtitle menus behave the same as embedded, without covering the video
-- 📦 **Portable data directory** — data lives in a `config` folder next to the executable (previously under the system AppData directory)
-- 🔧 Many fixes and polish since upstream: subtitle track selection sync, danmaku rendering and menus, memory/logging, translation completeness
+- ⏭️ **Intro / outro skipping** — manual duration with per-series memory
+- 🗂️ **Multi-server aggregated views** — browse several servers' libraries as one
+- 📺 **Trakt integration** — login and watch-history sync
+- ☁️ **WebDAV support** / 🔄 **config sync** / 🌐 **French localization**
+- 🔧 Lots of polish: subtitle track selection sync, player interaction, themes & styling, memory & logging
 
 ## ✨ Features
 
