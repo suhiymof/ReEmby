@@ -128,21 +128,29 @@ jobs:
       #   ReEmby-<ver>-win-x64-Setup.exe   安装版（Inno Setup，runner 预装）
       # 发布策略：continuous 滚动 Release——每次 push 成功后覆盖更新同名
       # 资产，下载页始终是最新构建；版本号取自根 CMakeLists.txt project()。
+      # 打包时套一层**固定名**的顶层目录（ReEmby-win-x64，不含版本号）：
+      # 无论哪个版本，解压出来的目录名始终一致，新版本可直接覆盖旧目录，
+      # 放在程序目录下的 config/ 得以保留。版本号只留在压缩包文件名上。
       - name: Package portable archive (7z)
         shell: bash
         run: |
           set -euxo pipefail
           VER="$(sed -n 's/^project(ReEmby VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt | head -1)"
           test -n "$VER"
-          mkdir -p dist
-          7z a -t7z -mx=9 "dist/ReEmby-${VER}-win-x64.7z" ./build/bin/Release/*
+          rm -rf dist/ReEmby-win-x64
+          mkdir -p dist/ReEmby-win-x64
+          cp -r build/bin/Release/* dist/ReEmby-win-x64/
+          7z a -t7z -mx=9 "dist/ReEmby-${VER}-win-x64.7z" ./dist/ReEmby-win-x64
           echo "QEMBY_VERSION=${VER}" >> "$GITHUB_ENV"
 
+      # 直接上传「解压即用的目录」，不再套一层 .7z：
+      # 从 Actions 下载得到 ReEmby-<ver>-win-x64.zip，解压后直接就是
+      # ReEmby-win-x64/ 目录，无需二次解压。
       - name: Upload portable build
         uses: actions/upload-artifact@v5
         with:
-          name: ReEmby-windows-x64
-          path: dist/ReEmby-*-win-x64.7z
+          name: ReEmby-${{ env.QEMBY_VERSION }}-win-x64
+          path: dist/ReEmby-win-x64/
           if-no-files-found: error
 
       # 调试符号单独留档（不在绿色包里，崩溃分析时按需下载）。
