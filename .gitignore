@@ -1,0 +1,59 @@
+# æ„å»ºç›®å½• (æœ€é‡è¦çš„ï¼)
+/build/
+/build*/
+*.user
+
+# C++ ç¼–è¯‘äº§ç‰©
+*.exe
+*.dll
+*.o
+*.obj
+*.ilk
+*.pdb
+*.suo
+
+# åº“æ–‡ä»?
+*.lib
+*.a
+*.so
+
+# MOC å’? UI ç”Ÿæˆçš„æ–‡ä»?
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+
+# æœ¬åœ° IDE è®¾ç½®
+.DS_Store
+.vs/
+.vscode/
+
+# clangd ç¼“å­˜
+.cache/
+compile_commands.json
+
+# é¢„ç¼–è¯‘ç¬¬ä¸‰æ–¹åº? (è¯·å‚é˜? README ä¸­çš„æ„å»ºè¯´æ˜)
+libs/libmpv/
+
+# Release æ„å»ºäº§ç‰©
+*.zip
+
+# AI ¸¨Öú¹¤¾ß
+.antigravityignore
+.antigravityrules
+.gemini/
+.agents/
+_agents/
+.workbuddy/
+# Ìû×Ó²İ¸å
+linuxdo_post.md
+
+# ´ò°üÊä³ö
+dist/
+release/
+
+# ops/debug artifacts (nginx config copies etc.)
+emby.conf
+
+# Local dev tools and scratch scripts -- never tracked.
+# (mpv standalone player for DV/gpu-next verification lives here too)
+tools/
